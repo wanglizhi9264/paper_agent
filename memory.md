@@ -7,13 +7,14 @@
 更新时间：2026-08-24
 
 - Phase 0 已完成：仓库、Python/uv 工程、前端工程、Docker Compose、配置加载、结构化日志、request id、health/live 与 health/ready、Ruff/mypy/pytest、前端 lint/typecheck/test/build、CI 工作流。
-- Phase 1 已完成：全部 ORM 模型（Document、Collection、CollectionDocument、IngestionJob、DocumentVersion、Chunk、IndexSnapshot、SystemState、Session、Message、RetrievalLog）、共享 enums、时间戳 mixin、Alembic async 配置与初始迁移 `0001_initial`。
-- 后端质量门实测通过：`uv run ruff check .`、`uv run ruff format --check .`、`uv run mypy app`（36 文件）、`uv run pytest -q`（44 通过，3 集成测试 skipped）。
-- 迁移离线 SQL 生成（upgrade head --sql / downgrade base --sql）已验证可编译。
-- 集成测试（`-m integration --run-integration`）需 live PostgreSQL，未在本机运行（Docker 待用户安装）；包含迁移可执行、CHECK 约束生效、ORM metadata 与反射 schema 一致三项校验。
-- 前端质量门实测通过：`oxlint src`（exit 0）、`tsc -b --noEmit`、`vitest run`（6 通过）、`vite build`。
-- 尚未实现：Pydantic schemas、API routes、Loader、chunking、索引、检索、LLM、前端业务页面、评测。下一步进入 Phase 2（上传与异步 ingestion 状态机纵向切片，先用 fake parser/index 跑通端到端状态机）。
-- 依赖说明：核心运行时依赖已锁定在 `uv.lock`；重型 ML 栈放入 `[ml]` optional extra，只在 GPU 主机用 `uv sync --extra ml` 安装，CI 不安装。
+- Phase 1 已完成：全部 ORM 模型、共享 enums、时间戳 mixin、Alembic async 配置与初始迁移 `0001_initial`。
+- Phase 2 已完成（fake parser/indexer 驱动状态机）：Pydantic schemas（common/document/collection/job，field_serializer 输出 RFC3339）、document/collection/job services、documents/collections/jobs API routes、ARQ worker `ingestion_task`、ingestion pipeline（`run_ingest` / `run_delete_cleanup`，advisory lock、幂等、失败保留旧版本）、ArqEnqueuer + FakeEnqueuer、post-commit enqueue 中间件。
+- 后端质量门实测通过：`uv run ruff check .`、`uv run ruff format --check .`、`uv run mypy app`（50 文件）、`uv run pytest -q`（69 通过，3 集成测试 skipped）。
+- 集成测试仍需 live PostgreSQL；Docker 待用户安装。
+- 前端未变（Phase 0 状态）。
+- 尚未实现：真实 Loader/chunking（Phase 3-4）、Dense/BM25 索引（Phase 5-6）、rerank/context（Phase 7）、LLM/SSE/citation（Phase 8）、删除/重建一致性恢复（Phase 9）、前端业务页面（Phase 10）、评测（Phase 11）。
+- 下一步：Phase 3 三种 Loader（PDF/DOCX/Markdown）与统一 ParsedDocument。
+- 依赖说明：核心运行时依赖已锁定在 `uv.lock`；aiosqlite、greenlet 加入 dev 组用于 async 单测；重型 ML 栈仍在 `[ml]` optional extra。
 - Docker 未在本机安装；用户已选择自行安装 Docker Desktop 后运行 `docker compose up -d`。compose 文件已就绪。
 
 ## 2. 已确认范围
@@ -105,7 +106,8 @@ max_upload_bytes: 104857600
 
 1. ~~Phase 0：初始化仓库、Python/uv 与 React/Vite/TypeScript 工程、compose、health、质量门、CI。~~ 已完成。
 2. ~~Phase 1：数据模型与初始 Alembic migration。~~ 已完成。
-3. Phase 2：上传与异步 ingestion 状态机纵向切片（fake parser/index 跑通端到端状态机）。需先补 Pydantic schemas、documents/collections/jobs API routes、ARQ worker 任务。
+3. ~~Phase 2：上传与异步 ingestion 状态机纵向切片（fake parser/index 跑通端到端状态机）。~~ 已完成。
+4. Phase 3：三种 Loader（PDF/DOCX/Markdown）与统一 ParsedDocument，OCR_REQUIRED 检测，golden fixtures。
 
 尚未授权或不应提前实现：OCR、多用户、云部署、向量数据库、Agent、知识图谱、额外 Loader。
 
@@ -129,6 +131,12 @@ max_upload_bytes: 104857600
 | 2026-08-24 | faiss_id 存为 chunks 上的可空 BIGINT + 全局序列 `faiss_id_seq` | chunk 属不可变 DocumentVersion，faiss_id 跨快照稳定，查询时直接由 chunks 表反查 | 迁移创建 SEQUENCE，CHECK faiss_id>=0 |
 | 2026-08-24 | 循环 FK（documents→document_versions、system_state→index_snapshots）用 use_alter 延迟创建 | 避免建表顺序死锁，autogenerate 兼容 | 迁移末尾 ALTER TABLE ADD CONSTRAINT |
 | 2026-08-24 | system_state 强制单例（id=1，CHECK id=1，迁移 seed） | 全局唯一 active snapshot 指针 | 迁移 INSERT ... ON CONFLICT DO NOTHING |
+| 2026-08-24 | 移除 `deferred=True`（active_document_version_id / active_index_snapshot_id） | async session 禁止隐式 lazy load，deferred 列在 async 路由/测试中访问会触发 MissingGreenlet | 列常规加载；如需省列再用显式 select |
+| 2026-08-24 | ARQ enqueue 在响应提交后由 http 中间件派发，失败不回滚 DB | spec §10：API 创建 doc+job 同事务提交再 enqueue；失败由 Phase 9 reconciliation 恢复 | job 保持 queued，不产生僵尸 |
+| 2026-08-24 | ingestion pipeline 用 `pg_advisory_xact_lock(document_id)`，SQLite 自动跳过 | 同文档同时最多一个写任务；单测无需 PG | `app/services/ingestion.py:_pg_advisory_lock` |
+| 2026-08-24 | Phase 2 parser/chunker 为确定性 fake（page=1, char=file_size, chunk=0） | 真实解析在 Phase 3-4；先验证状态机闭环 | DocumentVersion chunk_count=0，active 指针切换 |
+| 2026-08-24 | datetime 序列化用 pydantic `field_serializer` 输出 RFC3339+Z | 替代覆写 model_dump，mypy 友好 | schemas 统一 `to_rfc3339` |
+| 2026-08-24 | aiosqlite + greenlet 进 dev 依赖 | async ORM 单测需要 | `uv.lock` 更新 |
 
 ## 8. 验证记录
 
@@ -139,6 +147,7 @@ max_upload_bytes: 104857600
 | 2026-08-24 | Phase 0 前端质量门 | `npx oxlint src`、`npx tsc -b --noEmit`、`npx vitest run`、`npx vite build` | oxlint exit 0；typecheck ok；vitest 6 通过；build 成功 |
 | 2026-08-24 | Python 3.12 | `uv python install 3.12` | 安装 cpython-3.12.13 |
 | 2026-08-24 | Phase 1 ORM/迁移 | `uv run ruff check .`、`ruff format --check .`、`mypy app`(36)、`pytest -q`、`alembic upgrade head --sql`、`alembic downgrade 0001_initial:base --sql` | ruff/mypy 通过；44 单测通过、3 集成测试 skipped；迁移 SQL 可编译 |
+| 2026-08-24 | Phase 2 schemas/services/api/worker | `uv run ruff check .`、`ruff format --check .`、`mypy app`(50)、`pytest -q` | ruff/mypy 通过；69 单测通过、3 集成测试 skipped |
 
 ## 9. 未决事项
 

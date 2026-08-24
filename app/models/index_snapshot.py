@@ -65,7 +65,6 @@ class SystemState(Base):
     active_index_snapshot_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("index_snapshots.id", use_alter=True, name="fk_system_active_snapshot"),
         nullable=True,
-        deferred=True,
     )
     updated_at: Mapped[datetime] = mapped_column(
         nullable=False,

@@ -47,7 +47,6 @@ class Document(Base, TimestampMixin):
     active_document_version_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("document_versions.id", use_alter=True, name="fk_document_active_version"),
         nullable=True,
-        deferred=True,
     )
     parser_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
