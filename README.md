@@ -4,13 +4,14 @@ Local-first, single-user paper RAG assistant targeting an NVIDIA RTX 2060 (6 GB)
 
 ## Status
 
-Phase 0 — repository, quality gates, configuration, structured logging, health endpoints, and Docker Compose dependencies are in place. Ingestion, retrieval and chat arrive in later phases per `docs/proposal.md`.
+Phases 0–12 complete. The full pipeline is implemented: upload → parse → chunk → embed → index → search (BM25+Dense+RRF) → rerank → context pack → LLM → citation. See [`memory.md`](memory.md) for detailed progress.
 
 ## Prerequisites
 
 - Python 3.12 (managed by `uv`)
 - Node.js 20+ (frontend)
 - Docker Desktop (for PostgreSQL 16 and Redis 7)
+- NVIDIA RTX 2060 6 GB (for production embedding/rerank; CI uses deterministic fakes)
 
 ## Quick Start
 
@@ -76,6 +77,38 @@ PAPER_RAG_DATABASE_URL=postgresql+asyncpg://paper_rag:paper_rag_dev@127.0.0.1:54
 ```
 
 Real model smoke tests use the `model_smoke` marker and are never run in CI.
+
+## Architecture
+
+```
+API (FastAPI) ──→ Services ──→ Domain Protocols
+     ↑                  ↓
+Worker (ARQ) ──→ Services ──→ Adapters (Loaders, Embedding, FAISS, BM25, Reranker, LLM)
+```
+
+**Key modules:**
+
+| Module | Description |
+| --- | --- |
+| `app/loaders/` | PDF, DOCX, Markdown → unified `ParsedDocument` |
+| `app/chunking/` | Deterministic sentence splitter, heading tree, chunking pipeline |
+| `app/embedding/` | `EmbeddingProvider` protocol, E5 adapter, deterministic fake |
+| `app/index/` | FAISS `IndexIDMap2(IndexFlatIP)`, snapshot manifest, atomic activation |
+| `app/retrieval/` | BM25 index, RRF fusion, `RetrievalResult` |
+| `app/rerank/` | Cross-encoder protocol, BGE adapter, deterministic fake |
+| `app/context/` | Dedup, neighbor expansion, token-budget context packing, citation map |
+| `app/llm/` | `LLMProvider` protocol, OpenAI-compatible adapter, prompt templates, citation parser |
+| `app/services/` | Ingestion pipeline, consistency validation, stale job reconciliation |
+| `frontend/` | React + Vite + TypeScript: Documents, Collections, Chat (SSE streaming, source drawer) |
+
+## Evaluation
+
+```bash
+# Run ablation with smoke dataset
+uv run python -m eval.ablation eval/dataset.json
+```
+
+Metrics: Recall@1/3/5/10, MRR, nDCG@K, Citation Precision/Recall. Replace `eval/dataset.json` with 50+ human-annotated questions before final acceptance (spec §21).
 
 ## Configuration
 

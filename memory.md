@@ -13,14 +13,17 @@
 - Phase 4 已完成：确定性 Chunking pipeline（sentence splitter、heading tree、parent merge、fine split、title/table/code chunk、retrieval_content 拼接、SHA-256 hash、ChunkConfig/ChunkResult 模型）。RealChunker 已接入 ingestion pipeline。
 - Phase 5 已完成：Embedding protocol（EmbeddingProvider/ModelManifest/EmbeddingResult）、FakeEmbeddingAdapter（deterministic hash→vector）、E5Adapter（sentence-transformers，smoke-only）、FAISS wrapper（IndexIDMap2/IndexFlatIP、save/load/search、L2 normalize、zero-vector reject）、SnapshotManifest（build/validate/save/load、SHA-256 hash、atomic activation）、ingestion pipeline embedding+indexing 阶段（faiss_id 从 max+1 分配、shadow IndexSnapshot 创建+激活+旧快照 superseded）。
 - Phase 6 已完成：BM25 analyzer（中英文分词、domain terms 保留、jieba optional）、BM25Index（Okapi BM25 k1=1.5/b=0.75、IDF 公式、scope filter、minimum_should_match、serialization）、RRF fusion（rank from 1、1/(k+rank)、稳定 tie-break）、RetrievalResult 统一模型。
-- 后端质量门实测通过：`uv run ruff check .`、`uv run ruff format --check .`、`uv run mypy app`（65 文件）、`uv run pytest -q`（187 通过，3 集成测试 skipped）。
+- Phase 7 已完成：Reranker protocol（FakeReranker token overlap、BGEReranker CrossEncoder）、dedup（chunk_id→content_hash 两步）、neighbor_expansion（同文档同 section 前后各 1、expanded_from_chunk_id、score=0）、context builder（SourceBlock、pack_context budget-aware、sentence-boundary truncation、format_source_block、build_citation_map）。
+- Phase 8 已完成：LLMProvider protocol（async generate+stream）、FakeLLMProvider（deterministic citation-aware）、OpenAICompatibleProvider（httpx SSE streaming）、prompts（system/rewrite/message builders）、citations（parse [N]、strip invalid、validate_citations）。
+- Phase 9 已完成：consistency validation（check_index_health 启动校验 active IndexSnapshot、reconcile_stale_jobs 标记 RUNNING→FAILED+STALE_ON_RESTART、check_document_consistency 检查 READY 文档指向非 READY 版本）。
+- Phase 10 已完成：前端 MVP（api/client 扩展 apiPost/apiPostForm/apiDelete/sseStream、types document/collection/chat、features documents/collections/chat 含 SSE state machine、pages DocumentsPage/CollectionsPage/ChatPage 含 source drawer 和 citation badges、AppShell 新增导航、CSS 文档表格/集合卡片/聊天布局/来源面板）。
+- Phase 11 已完成：评测框架（retrieval_eval Recall@1/3/5/10/MRR/nDCG/Citation P/R、ablation 7 种配置 dense_only/bm25_only/dense_bm25_rrf/with_rerank/full_pipeline/no_rewrite/no_expansion、format_ablation_markdown、save_results JSON、smoke dataset 3 条）。
+- Phase 12 已完成：README 更新（架构说明、模块表、评测说明、全 Phase 状态更新）、memory.md 最终状态更新。
+- 后端质量门实测通过：`uv run ruff check .`、`uv run ruff format --check .`、`uv run mypy app`（73 文件）、`uv run pytest -q`（243 通过，3 集成测试 skipped）。
+- 前端质量门实测通过：`npm run lint`、`npm run typecheck`、`npm test -- --run`（6 通过）、`npm run build`（279KB JS / 5KB CSS）。
 - 集成测试仍需 live PostgreSQL；Docker 待用户安装。
-- 前端未变（Phase 0 状态）。
-- 尚未完成：rerank/context（Phase 7）、LLM/SSE/citation（Phase 8）、删除/重建一致性恢复（Phase 9）、前端业务页面（Phase 10）、评测（Phase 11）。
-- 下一步：Phase 7 Rerank、去重与上下文工程。
-- 依赖说明：pymupdf/python-docx/markdown-it-py 加入核心运行时依赖；aiosqlite/greenlet 在 dev 组；重型 ML 栈仍在 `[ml]` optional extra。使用清华镜像安装成功。
-- 已知问题：PyMuPDF 1.28.2 在 macOS arm64 的 pytest 进程内 segfault（与其他 C 扩展冲突）；PDF 测试通过 subprocess 运行 loader，生产中 loader 运行在 ARQ worker 进程不受影响。
-- Docker 未在本机安装；用户已选择自行安装 Docker Desktop 后运行 `docker compose up -d`。compose 文件已就绪。
+- 尚未完成：50+ 人工标注评测集（eval/dataset.json 当前为 3 条 smoke）、真实模型 smoke test（需 GPU 主机）、真实端到端集成测试（需 Docker）。
+- 已知限制：PyMuPDF 1.28.2 在 macOS arm64 pytest 进程内 segfault；PDF 测试通过 subprocess 运行；生产中 loader 运行在 ARQ worker 不受影响。
 
 ## 2. 已确认范围
 
@@ -116,7 +119,12 @@ max_upload_bytes: 104857600
 5. ~~Phase 4：确定性 Chunking（sentence splitter、markdown element parser、heading tree、parent merge、title/table/chapter chunk、hash 和 metadata）。~~ 已完成。
 6. ~~Phase 5：Dense 索引闭环（Embedding protocol、E5 adapter、模型 manifest、FAISS wrapper、faiss_id mapping、save/load、shadow activation）。~~ 已完成。
 7. ~~Phase 6：BM25 与混合检索（中英文 analyzer、BM25 statistics/snapshot、Dense/Sparse retrievers、RRF、统一 RetrievalResult、scope filter）。~~ 已完成。
-8. Phase 7：Rerank、去重与上下文工程。
+8. ~~Phase 7：Rerank、去重与上下文工程。~~ 已完成。
+9. ~~Phase 8：LLM provider、query rewrite、citations、SSE streaming。~~ 已完成。
+10. ~~Phase 9：consistency validation、stale job reconciliation。~~ 已完成。
+11. ~~Phase 10：前端 MVP — documents, collections, chat。~~ 已完成。
+12. ~~Phase 11：evaluation framework + ablation。~~ 已完成。
+13. ~~Phase 12：README 更新、架构说明、memory 最终状态。~~ 已完成。
 
 尚未授权或不应提前实现：OCR、多用户、云部署、向量数据库、Agent、知识图谱、额外 Loader。
 
