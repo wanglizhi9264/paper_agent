@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import Protocol
+from typing import Any, Protocol
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -89,6 +89,51 @@ class _DefaultFakeChunker:
     def chunk(self, document: Document, version: DocumentVersion) -> int:
         # chunk_count — Phase 2 placeholder (no real chunks written).
         return 0
+
+
+class RealChunker:
+    """Runs the deterministic chunking pipeline against a ParsedDocument.
+
+    Writes Chunk ORM rows for the given DocumentVersion and returns the count.
+    The parser must have produced a ParsedDocument available via ``parsed_doc``.
+    """
+
+    def __init__(self, parsed_doc: Any) -> None:
+        self._parsed = parsed_doc
+
+    def chunk(self, document: Document, version: DocumentVersion) -> int:
+        from app.chunking.models import ChunkConfig
+        from app.chunking.pipeline import chunk_document
+        from app.models.chunk import Chunk as ChunkORM
+        from app.models.enums import ChunkKind
+
+        results = chunk_document(self._parsed, ChunkConfig.default())
+        kind_map = {
+            "text": ChunkKind.TEXT,
+            "title": ChunkKind.TITLE,
+            "table": ChunkKind.TABLE,
+            "code": ChunkKind.CODE,
+            "chapter": ChunkKind.CHAPTER,
+        }
+        for r in results:
+            orm = ChunkORM(
+                document_id=document.id,
+                document_version_id=version.id,
+                chunk_index=r.chunk_index,
+                kind=kind_map[r.kind],
+                section_path=r.section_path,
+                raw_content=r.raw_content,
+                retrieval_content=r.retrieval_content,
+                content_hash=r.content_hash,
+                character_count=r.character_count,
+                page_start=r.page_start,
+                page_end=r.page_end,
+                line_start=r.line_start,
+                line_end=r.line_end,
+                metadata_=r.metadata or None,
+            )
+            version.chunks.append(orm)
+        return len(results)
 
 
 async def _pg_advisory_lock(session: AsyncSession, key: int) -> None:

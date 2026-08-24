@@ -10,7 +10,8 @@
 - Phase 1 已完成：全部 ORM 模型、共享 enums、时间戳 mixin、Alembic async 配置与初始迁移 `0001_initial`。
 - Phase 2 已完成（fake parser/indexer 驱动状态机）：Pydantic schemas、document/collection/job services、documents/collections/jobs API routes、ARQ worker `ingestion_task`、ingestion pipeline、ArqEnqueuer + FakeEnqueuer、post-commit enqueue 中间件。
 - Phase 3 已完成：三种 Loader（PdfLoader/DocxLoader/MarkdownLoader）与统一 ParsedDocument/Paragraph 模型、Loader Registry、OCR_REQUIRED 检测、golden fixture 测试。
-- 后端质量门实测通过：`uv run ruff check .`、`uv run ruff format --check .`、`uv run mypy app`（55 文件）、`uv run pytest -q`（87 通过，3 集成测试 skipped）。
+- Phase 4 已完成：确定性 Chunking pipeline（sentence splitter、heading tree、parent merge、fine split、title/table/code chunk、retrieval_content 拼接、SHA-256 hash、ChunkConfig/ChunkResult 模型）。RealChunker 已接入 ingestion pipeline。
+- 后端质量门实测通过：`uv run ruff check .`、`uv run ruff format --check .`、`uv run mypy app`（59 文件）、`uv run pytest -q`（116 通过，3 集成测试 skipped）。
 - 集成测试仍需 live PostgreSQL；Docker 待用户安装。
 - 前端未变（Phase 0 状态）。
 - 尚未实现：确定性 chunking（Phase 4）、Dense/BM25 索引（Phase 5-6）、rerank/context（Phase 7）、LLM/SSE/citation（Phase 8）、删除/重建一致性恢复（Phase 9）、前端业务页面（Phase 10）、评测（Phase 11）。
@@ -110,7 +111,8 @@ max_upload_bytes: 104857600
 2. ~~Phase 1：数据模型与初始 Alembic migration。~~ 已完成。
 3. ~~Phase 2：上传与异步 ingestion 状态机纵向切片（fake parser/index 跑通端到端状态机）。~~ 已完成。
 4. ~~Phase 3：三种 Loader（PDF/DOCX/Markdown）与统一 ParsedDocument，OCR_REQUIRED 检测，golden fixtures。~~ 已完成。
-5. Phase 4：确定性 Chunking（sentence splitter、markdown element parser、heading tree、parent merge、title/table/chapter chunk、hash 和 metadata）。
+5. ~~Phase 4：确定性 Chunking（sentence splitter、markdown element parser、heading tree、parent merge、title/table/chapter chunk、hash 和 metadata）。~~ 已完成。
+6. Phase 5：Dense 索引闭环（Embedding protocol、E5 adapter、模型 manifest、FAISS wrapper、faiss_id mapping、save/load、shadow activation）。
 
 尚未授权或不应提前实现：OCR、多用户、云部署、向量数据库、Agent、知识图谱、额外 Loader。
 
@@ -144,6 +146,10 @@ max_upload_bytes: 104857600
 | 2026-08-24 | PDF 测试通过 subprocess 运行 PdfLoader | PyMuPDF 1.28.2 在 macOS arm64 pytest 进程内 segfault（与其他 C 扩展冲突）；生产中 loader 运行在 ARQ worker 不受影响 | `tests/fixtures/pdf_runner.py` |
 | 2026-08-24 | PDF 文本提取用 `get_text("blocks")` 而非 `get_text("dict")` | 更简洁 API，坐标排序用 block bbox | `app/loaders/pdf.py` |
 | 2026-08-24 | Loader 依赖安装用清华镜像 | 用户在中国，PyPI 大包（pymupdf 22.8MB）下载超时 | `uv pip install --index-url https://pypi.tuna.tsinghua.edu.cn/simple` |
+| 2026-08-24 | 句末标点用字符串拼接而非 raw regex 字符类 | `r"[。！？!?]"` 在某些环境下 `. ` 不被匹配；改用 `"。！？.!?。！？"` 字符串拼接到 rf-string | `app/chunking/sentence.py` |
+| 2026-08-24 | ruff 全局忽略 RUF001/002/003 | 中文全宽标点（。！？，；）是分词器刻意使用的，非歧义 | `pyproject.toml` |
+| 2026-08-24 | chunking pipeline 为纯函数，不依赖 DB/I/O | 确定性 golden test：同输入+配置→同 chunk_index/content_hash/retrieval_content | `app/chunking/pipeline.py` |
+| 2026-08-24 | RealChunker 写 Chunk ORM 行接入 ingestion pipeline | 替换 Phase 2 fake chunker，真实 chunk 入库 | `app/services/ingestion.py` |
 
 ## 8. 验证记录
 
@@ -156,6 +162,7 @@ max_upload_bytes: 104857600
 | 2026-08-24 | Phase 1 ORM/迁移 | `uv run ruff check .`、`ruff format --check .`、`mypy app`(36)、`pytest -q`、`alembic upgrade head --sql`、`alembic downgrade 0001_initial:base --sql` | ruff/mypy 通过；44 单测通过、3 集成测试 skipped；迁移 SQL 可编译 |
 | 2026-08-24 | Phase 2 schemas/services/api/worker | `uv run ruff check .`、`ruff format --check .`、`mypy app`(50)、`pytest -q` | ruff/mypy 通过；69 单测通过、3 集成测试 skipped |
 | 2026-08-24 | Phase 3 loaders | `uv run ruff check .`、`ruff format --check .`、`mypy app`(55)、`pytest -q` | ruff/mypy 通过；87 单测通过、3 集成测试 skipped |
+| 2026-08-24 | Phase 4 chunking | `uv run ruff check .`、`ruff format --check .`、`mypy app`(59)、`pytest -q` | ruff/mypy 通过；116 单测通过、3 集成测试 skipped |
 
 ## 9. 未决事项
 
