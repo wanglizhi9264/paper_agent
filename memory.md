@@ -11,11 +11,13 @@
 - Phase 2 已完成（fake parser/indexer 驱动状态机）：Pydantic schemas、document/collection/job services、documents/collections/jobs API routes、ARQ worker `ingestion_task`、ingestion pipeline、ArqEnqueuer + FakeEnqueuer、post-commit enqueue 中间件。
 - Phase 3 已完成：三种 Loader（PdfLoader/DocxLoader/MarkdownLoader）与统一 ParsedDocument/Paragraph 模型、Loader Registry、OCR_REQUIRED 检测、golden fixture 测试。
 - Phase 4 已完成：确定性 Chunking pipeline（sentence splitter、heading tree、parent merge、fine split、title/table/code chunk、retrieval_content 拼接、SHA-256 hash、ChunkConfig/ChunkResult 模型）。RealChunker 已接入 ingestion pipeline。
-- 后端质量门实测通过：`uv run ruff check .`、`uv run ruff format --check .`、`uv run mypy app`（59 文件）、`uv run pytest -q`（116 通过，3 集成测试 skipped）。
+- Phase 5 已完成：Embedding protocol（EmbeddingProvider/ModelManifest/EmbeddingResult）、FakeEmbeddingAdapter（deterministic hash→vector）、E5Adapter（sentence-transformers，smoke-only）、FAISS wrapper（IndexIDMap2/IndexFlatIP、save/load/search、L2 normalize、zero-vector reject）、SnapshotManifest（build/validate/save/load、SHA-256 hash、atomic activation）、ingestion pipeline embedding+indexing 阶段（faiss_id 从 max+1 分配、shadow IndexSnapshot 创建+激活+旧快照 superseded）。
+- 已生成 `docs/testing-evaluation-plan.md`，供后续 AI 补齐测试框架，并在用户提供论文后制作正式评测集。
+- 后端质量门实测通过：`uv run ruff check .`、`uv run ruff format --check .`、`uv run mypy app`（65 文件）、`uv run pytest -q`（160 通过，3 集成测试 skipped）。
 - 集成测试仍需 live PostgreSQL；Docker 待用户安装。
 - 前端未变（Phase 0 状态）。
-- 尚未实现：确定性 chunking（Phase 4）、Dense/BM25 索引（Phase 5-6）、rerank/context（Phase 7）、LLM/SSE/citation（Phase 8）、删除/重建一致性恢复（Phase 9）、前端业务页面（Phase 10）、评测（Phase 11）。
-- 下一步：Phase 4 确定性 Chunking（sentence splitter、markdown element parser、heading tree、parent merge、title/table/chapter chunk、hash 和 metadata）。
+- 尚未完成：BM25/Hybrid（Phase 6）、rerank/context（Phase 7）、LLM/SSE/citation（Phase 8）、删除/重建一致性恢复（Phase 9）、前端业务页面（Phase 10）、评测（Phase 11）。
+- 下一步：Phase 6 BM25 与混合检索（中英文 analyzer、BM25 statistics/snapshot、Dense/Sparse retrievers、RRF、统一 RetrievalResult、scope filter）。
 - 依赖说明：pymupdf/python-docx/markdown-it-py 加入核心运行时依赖；aiosqlite/greenlet 在 dev 组；重型 ML 栈仍在 `[ml]` optional extra。使用清华镜像安装成功。
 - 已知问题：PyMuPDF 1.28.2 在 macOS arm64 的 pytest 进程内 segfault（与其他 C 扩展冲突）；PDF 测试通过 subprocess 运行 loader，生产中 loader 运行在 ARQ worker 进程不受影响。
 - Docker 未在本机安装；用户已选择自行安装 Docker Desktop 后运行 `docker compose up -d`。compose 文件已就绪。
@@ -112,7 +114,8 @@ max_upload_bytes: 104857600
 3. ~~Phase 2：上传与异步 ingestion 状态机纵向切片（fake parser/index 跑通端到端状态机）。~~ 已完成。
 4. ~~Phase 3：三种 Loader（PDF/DOCX/Markdown）与统一 ParsedDocument，OCR_REQUIRED 检测，golden fixtures。~~ 已完成。
 5. ~~Phase 4：确定性 Chunking（sentence splitter、markdown element parser、heading tree、parent merge、title/table/chapter chunk、hash 和 metadata）。~~ 已完成。
-6. Phase 5：Dense 索引闭环（Embedding protocol、E5 adapter、模型 manifest、FAISS wrapper、faiss_id mapping、save/load、shadow activation）。
+6. ~~Phase 5：Dense 索引闭环（Embedding protocol、E5 adapter、模型 manifest、FAISS wrapper、faiss_id mapping、save/load、shadow activation）。~~ 已完成。
+7. Phase 6：BM25 与混合检索（中英文 analyzer、BM25 statistics/snapshot、Dense/Sparse retrievers、RRF、统一 RetrievalResult、scope filter）。
 
 尚未授权或不应提前实现：OCR、多用户、云部署、向量数据库、Agent、知识图谱、额外 Loader。
 
@@ -129,6 +132,8 @@ max_upload_bytes: 104857600
 | 2026-08-24 | MVP 包含 Collection | 用户确认需要 | many-to-many 与 scope APIs |
 | 2026-08-24 | OCR/复杂论文版面延后 | 用户确认 MVP 不需要 | PyMuPDF 文本解析、OCR_REQUIRED |
 | 2026-08-24 | Chunk 字符数与 context tokens 分离 | 用户确认 | 两套显式计数和配置名 |
+| 2026-08-24 | Evaluation 从 Phase 6 开始左移 | 避免全部功能完成后才发现检索问题 | Phase 6 建 smoke dataset，Phase 11 冻结正式 test |
+| 2026-08-24 | 评测证据使用稳定 anchor | Chunk ID 会随 reindex 改变 | quote/page/section/hash 为事实标注，Chunk ID 按 snapshot 派生 |
 | 2026-08-24 | Phase 0 完成：uv + React/Vite + compose + health + 质量门 + CI | 按 proposal Phase 0 验收 | 仓库可运行；进入 Phase 1 |
 | 2026-08-24 | 重型 ML 依赖放入 optional `[ml]` extra | CI 无 GPU，避免安装 torch | `uv sync --extra ml` 仅在 GPU 主机执行 |
 | 2026-08-24 | health/ready 在无 active IndexSnapshot 时返回 ok + detail=not_initialized | Phase 0 无 ingestion，索引缺失是已知态而非故障 | 检索请求时仍返回 INDEX_UNAVAILABLE |
@@ -150,6 +155,11 @@ max_upload_bytes: 104857600
 | 2026-08-24 | ruff 全局忽略 RUF001/002/003 | 中文全宽标点（。！？，；）是分词器刻意使用的，非歧义 | `pyproject.toml` |
 | 2026-08-24 | chunking pipeline 为纯函数，不依赖 DB/I/O | 确定性 golden test：同输入+配置→同 chunk_index/content_hash/retrieval_content | `app/chunking/pipeline.py` |
 | 2026-08-24 | RealChunker 写 Chunk ORM 行接入 ingestion pipeline | 替换 Phase 2 fake chunker，真实 chunk 入库 | `app/services/ingestion.py` |
+| 2026-08-24 | FakeEmbeddingAdapter 用 MD5 hash→vector | CI 无需下载模型，确定性、可复现；共享 token 的文本产生更高 cosine | `app/embedding/fake.py` |
+| 2026-08-24 | FAISS inner index 类型检查放宽为仅 dimension | SWIG 绑定不暴露 IndexFlatIP 具体子类，`isinstance(idx.index, faiss.IndexFlatIP)` 恒为 False | `app/index/faiss_index.py:load` |
+| 2026-08-24 | faiss_id 从 max(existing)+1 分配，不从 0 开始 | reindex 时旧 chunk 仍有 faiss_id；从 0 起会违反 unique 约束；生产 PG 用 sequence | `app/services/ingestion.py` |
+| 2026-08-24 | manifest sha256 排除 created_at | 时间戳不稳定，排除后同内容→同 hash | `app/index/snapshot.py` |
+| 2026-08-24 | numpy/faiss-cpu 用清华镜像安装 | macOS 无预装 | `uv pip install --index-url https://pypi.tuna.tsinghua.edu.cn/simple numpy faiss-cpu` |
 
 ## 8. 验证记录
 
@@ -163,6 +173,7 @@ max_upload_bytes: 104857600
 | 2026-08-24 | Phase 2 schemas/services/api/worker | `uv run ruff check .`、`ruff format --check .`、`mypy app`(50)、`pytest -q` | ruff/mypy 通过；69 单测通过、3 集成测试 skipped |
 | 2026-08-24 | Phase 3 loaders | `uv run ruff check .`、`ruff format --check .`、`mypy app`(55)、`pytest -q` | ruff/mypy 通过；87 单测通过、3 集成测试 skipped |
 | 2026-08-24 | Phase 4 chunking | `uv run ruff check .`、`ruff format --check .`、`mypy app`(59)、`pytest -q` | ruff/mypy 通过；116 单测通过、3 集成测试 skipped |
+| 2026-08-24 | Phase 5 dense index | `uv run ruff check .`、`ruff format --check .`、`mypy app`(65)、`pytest -q` | ruff/mypy 通过；160 单测通过、3 集成测试 skipped |
 
 ## 9. 未决事项
 

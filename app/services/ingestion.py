@@ -19,8 +19,10 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, Protocol
 
+import numpy as np
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,9 +32,11 @@ from app.models.document import Document
 from app.models.enums import (
     DocumentStatus,
     DocumentVersionStatus,
+    IndexSnapshotStatus,
     JobStage,
     JobStatus,
 )
+from app.models.index_snapshot import IndexSnapshot, SystemState
 from app.models.job import IngestionJob
 
 logger = get_logger(__name__)
@@ -188,12 +192,19 @@ async def run_ingest(
     *,
     parser: FakeParser = _DefaultFakeParser(),
     chunker: FakeChunker = _DefaultFakeChunker(),
+    embedding_provider: Any | None = None,
+    indexes_dir: Path | None = None,
 ) -> None:
     """Drive one ingest/reindex job through the full state machine.
 
     Idempotent: a job already succeeded is a no-op. On any ``PipelineError``
     the job is marked failed and the document's prior active version/snapshot
     are left intact.
+
+    When ``embedding_provider`` is provided and chunks are produced, the
+    embedding + indexing stages run: vectors are generated, a FAISS index is
+    built, saved to a shadow path, validated via manifest, and atomically
+    activated as a new IndexSnapshot.
     """
     if job.status == JobStatus.SUCCEEDED:
         return
@@ -222,13 +233,122 @@ async def run_ingest(
         version.chunk_count = chunk_count
         version.character_count = char_count
 
-        await _set_doc_status(document, DocumentStatus.EMBEDDING)
-        await _set_job(
-            session, job, status=JobStatus.RUNNING, stage=JobStage.EMBEDDING, progress=70
-        )
+        # Embedding stage (spec §13.1): embed chunkable chunks and build FAISS.
+        faiss_id_map: dict[int, uuid.UUID] = {}
+        if embedding_provider is not None and chunk_count > 0:
+            await _set_doc_status(document, DocumentStatus.EMBEDDING)
+            await _set_job(
+                session, job, status=JobStatus.RUNNING, stage=JobStage.EMBEDDING, progress=70
+            )
 
-        await _set_doc_status(document, DocumentStatus.INDEXING)
-        await _set_job(session, job, status=JobStatus.RUNNING, stage=JobStage.INDEXING, progress=90)
+            from sqlalchemy import func as sa_func
+            from sqlalchemy import select as sa_select
+
+            from app.index.faiss_index import FaissIndex
+            from app.index.snapshot import (
+                build_manifest,
+                save_manifest,
+                validate_manifest,
+            )
+            from app.models.chunk import Chunk
+
+            manifest_emb = embedding_provider.manifest
+            version.embedding_model_id = manifest_emb.model_id
+            version.embedding_revision = manifest_emb.revision
+            version.embedding_dimension = manifest_emb.dimension
+            version.embedding_signature = manifest_emb.signature
+
+            result_chunks = await session.execute(
+                sa_select(Chunk)
+                .where(Chunk.document_version_id == version.id)
+                .order_by(Chunk.chunk_index)
+            )
+            chunkable = [
+                c
+                for c in result_chunks.scalars().all()
+                if not (c.metadata_ and c.metadata_.get("code_not_add_index"))
+            ]
+
+            if chunkable:
+                texts = [c.retrieval_content for c in chunkable]
+                emb_result = embedding_provider.embed_texts(texts, is_query=False)
+
+                max_id_result = await session.execute(sa_select(sa_func.max(Chunk.faiss_id)))
+                max_faiss_id = max_id_result.scalar() or -1
+                faiss_ids = np.arange(
+                    max_faiss_id + 1, max_faiss_id + 1 + len(chunkable), dtype=np.int64
+                )
+                for i, c in enumerate(chunkable):
+                    c.faiss_id = int(faiss_ids[i])
+                    c.token_count = None
+                    faiss_id_map[int(faiss_ids[i])] = c.id
+
+                faiss_idx = FaissIndex.create(manifest_emb.dimension)
+                faiss_idx.add_texts(emb_result.vectors, faiss_ids, normalize=False)
+
+                await _set_doc_status(document, DocumentStatus.INDEXING)
+                await _set_job(
+                    session, job, status=JobStatus.RUNNING, stage=JobStage.INDEXING, progress=90
+                )
+
+                if indexes_dir is None:
+                    indexes_dir = Path("./storage/indexes")
+                snap_dir = indexes_dir / str(version.id)
+                snap_dir.mkdir(parents=True, exist_ok=True)
+                faiss_path = snap_dir / "index.faiss"
+                manifest_path = snap_dir / "manifest.json"
+                faiss_idx.save(faiss_path)
+
+                manifest = build_manifest(
+                    manifest_embedding=manifest_emb,
+                    faiss_path=faiss_path,
+                    document_versions={str(document.id): str(version.id)},
+                    document_count=1,
+                    chunk_count=len(chunkable),
+                    max_faiss_id=int(faiss_ids[-1]) if len(faiss_ids) > 0 else 0,
+                )
+                save_manifest(manifest, manifest_path)
+                validate_manifest(
+                    manifest,
+                    faiss_path=faiss_path,
+                    expected_embedding_signature=manifest_emb.signature,
+                    expected_dimension=manifest_emb.dimension,
+                )
+
+                snapshot = IndexSnapshot(
+                    status=IndexSnapshotStatus.ACTIVE,
+                    embedding_signature=manifest_emb.signature,
+                    faiss_path=str(faiss_path),
+                    manifest_sha256=manifest.sha256,
+                    manifest=manifest.to_dict(),
+                    document_count=1,
+                    chunk_count=len(chunkable),
+                    max_faiss_id=int(faiss_ids[-1]) if len(faiss_ids) > 0 else 0,
+                    activated_at=datetime.now(UTC),
+                )
+                session.add(snapshot)
+                await session.flush()
+
+                # Update SystemState singleton.
+                sys_state = await session.get(SystemState, 1)
+                if sys_state is None:
+                    sys_state = SystemState(id=1)
+                    session.add(sys_state)
+                old_snapshot_id = sys_state.active_index_snapshot_id
+                if old_snapshot_id is not None:
+                    old = await session.get(IndexSnapshot, old_snapshot_id)
+                    if old is not None and old.status == IndexSnapshotStatus.ACTIVE:
+                        old.status = IndexSnapshotStatus.SUPERSEDED
+                sys_state.active_index_snapshot_id = snapshot.id
+        else:
+            await _set_doc_status(document, DocumentStatus.EMBEDDING)
+            await _set_job(
+                session, job, status=JobStatus.RUNNING, stage=JobStage.EMBEDDING, progress=70
+            )
+            await _set_doc_status(document, DocumentStatus.INDEXING)
+            await _set_job(
+                session, job, status=JobStatus.RUNNING, stage=JobStage.INDEXING, progress=90
+            )
 
         # Finalize: mark version ready and atomically switch the document pointer.
         version.status = DocumentVersionStatus.READY
