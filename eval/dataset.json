@@ -1,0 +1,33 @@
+{
+  "dataset": [
+    {
+      "id": "eval-001",
+      "question": "What is the main architecture of the model?",
+      "scope": {"type": "all"},
+      "relevant_chunk_ids": ["chunk-1"],
+      "reference_answer": "The model uses a transformer-based architecture.",
+      "required_citation_chunk_ids": ["chunk-1"]
+    },
+    {
+      "id": "eval-002",
+      "question": "What training data was used?",
+      "scope": {"type": "all"},
+      "relevant_chunk_ids": ["chunk-2"],
+      "reference_answer": "The model was trained on a large corpus of text.",
+      "required_citation_chunk_ids": ["chunk-2"]
+    },
+    {
+      "id": "eval-003",
+      "question": "What are the evaluation metrics reported?",
+      "scope": {"type": "all"},
+      "relevant_chunk_ids": ["chunk-3"],
+      "reference_answer": "FID, IS, and CLIP score are reported.",
+      "required_citation_chunk_ids": ["chunk-3"]
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "created_at": "2026-08-24",
+    "note": "Smoke dataset for Phase 11 framework. Replace with 50+ human-annotated questions before final acceptance."
+  }
+}
