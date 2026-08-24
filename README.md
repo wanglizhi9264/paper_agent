@@ -28,7 +28,10 @@ docker compose up -d
 cp .env.example .env
 # edit .env: set PAPER_RAG_DATABASE_URL, PAPER_RAG_REDIS_URL, model ids, LLM endpoint
 
-# 5. Run API
+# 5. Apply database migrations
+uv run alembic upgrade head
+
+# 6. Run API
 uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 
 # 6. Health checks
@@ -68,7 +71,8 @@ npm --prefix frontend run build
 Integration tests require live PostgreSQL/Redis and are gated behind `--run-integration`:
 
 ```bash
-uv run pytest -m integration --run-integration
+PAPER_RAG_DATABASE_URL=postgresql+asyncpg://paper_rag:paper_rag_dev@127.0.0.1:5432/paper_rag \
+  uv run pytest -m integration --run-integration
 ```
 
 Real model smoke tests use the `model_smoke` marker and are never run in CI.

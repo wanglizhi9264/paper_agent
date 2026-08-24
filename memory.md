@@ -7,11 +7,13 @@
 更新时间：2026-08-24
 
 - Phase 0 已完成：仓库、Python/uv 工程、前端工程、Docker Compose、配置加载、结构化日志、request id、health/live 与 health/ready、Ruff/mypy/pytest、前端 lint/typecheck/test/build、CI 工作流。
-- 后端质量门实测通过：`uv run ruff check .`、`uv run ruff format --check .`、`uv run mypy app`（26 文件）、`uv run pytest -q`（20 通过）。
+- Phase 1 已完成：全部 ORM 模型（Document、Collection、CollectionDocument、IngestionJob、DocumentVersion、Chunk、IndexSnapshot、SystemState、Session、Message、RetrievalLog）、共享 enums、时间戳 mixin、Alembic async 配置与初始迁移 `0001_initial`。
+- 后端质量门实测通过：`uv run ruff check .`、`uv run ruff format --check .`、`uv run mypy app`（36 文件）、`uv run pytest -q`（44 通过，3 集成测试 skipped）。
+- 迁移离线 SQL 生成（upgrade head --sql / downgrade base --sql）已验证可编译。
+- 集成测试（`-m integration --run-integration`）需 live PostgreSQL，未在本机运行（Docker 待用户安装）；包含迁移可执行、CHECK 约束生效、ORM metadata 与反射 schema 一致三项校验。
 - 前端质量门实测通过：`oxlint src`（exit 0）、`tsc -b --noEmit`、`vitest run`（6 通过）、`vite build`。
-- 已初始化 Git 仓库并完成首次提交。
-- 尚未实现：Alembic 初始迁移、ORM 模型、Loader、chunking、索引、检索、LLM、前端业务页面、评测。下一步进入 Phase 1（数据模型与迁移）。
-- 依赖说明：核心运行时依赖已锁定在 `uv.lock`；重型 ML 栈（torch、sentence-transformers、faiss-cpu、transformers、numpy）放入 `pyproject.toml` 的 `[project.optional-dependencies].ml`，只在 GPU 主机用 `uv sync --extra ml` 安装，CI 不安装。
+- 尚未实现：Pydantic schemas、API routes、Loader、chunking、索引、检索、LLM、前端业务页面、评测。下一步进入 Phase 2（上传与异步 ingestion 状态机纵向切片，先用 fake parser/index 跑通端到端状态机）。
+- 依赖说明：核心运行时依赖已锁定在 `uv.lock`；重型 ML 栈放入 `[ml]` optional extra，只在 GPU 主机用 `uv sync --extra ml` 安装，CI 不安装。
 - Docker 未在本机安装；用户已选择自行安装 Docker Desktop 后运行 `docker compose up -d`。compose 文件已就绪。
 
 ## 2. 已确认范围
@@ -102,8 +104,8 @@ max_upload_bytes: 104857600
 ## 6. 当前实施队列
 
 1. ~~Phase 0：初始化仓库、Python/uv 与 React/Vite/TypeScript 工程、compose、health、质量门、CI。~~ 已完成。
-2. Phase 1：数据模型与初始 Alembic migration（Document、Collection、association、IngestionJob、DocumentVersion、IndexSnapshot、SystemState、Chunk、Session、Message、RetrievalLog），repository/service 事务边界。
-3. Phase 2：上传与异步 ingestion 状态机纵向切片（fake parser/index 跑通端到端状态机）。
+2. ~~Phase 1：数据模型与初始 Alembic migration。~~ 已完成。
+3. Phase 2：上传与异步 ingestion 状态机纵向切片（fake parser/index 跑通端到端状态机）。需先补 Pydantic schemas、documents/collections/jobs API routes、ARQ worker 任务。
 
 尚未授权或不应提前实现：OCR、多用户、云部署、向量数据库、Agent、知识图谱、额外 Loader。
 
@@ -123,6 +125,10 @@ max_upload_bytes: 104857600
 | 2026-08-24 | Phase 0 完成：uv + React/Vite + compose + health + 质量门 + CI | 按 proposal Phase 0 验收 | 仓库可运行；进入 Phase 1 |
 | 2026-08-24 | 重型 ML 依赖放入 optional `[ml]` extra | CI 无 GPU，避免安装 torch | `uv sync --extra ml` 仅在 GPU 主机执行 |
 | 2026-08-24 | health/ready 在无 active IndexSnapshot 时返回 ok + detail=not_initialized | Phase 0 无 ingestion，索引缺失是已知态而非故障 | 检索请求时仍返回 INDEX_UNAVAILABLE |
+| 2026-08-24 | ORM JSON 列用 `JSON().with_variant(JSONB(), "postgresql")` 工厂 | 单测在 SQLite 跑通 ORM 映射，生产用原生 JSONB | `app/db/types.py:jsonb()` |
+| 2026-08-24 | faiss_id 存为 chunks 上的可空 BIGINT + 全局序列 `faiss_id_seq` | chunk 属不可变 DocumentVersion，faiss_id 跨快照稳定，查询时直接由 chunks 表反查 | 迁移创建 SEQUENCE，CHECK faiss_id>=0 |
+| 2026-08-24 | 循环 FK（documents→document_versions、system_state→index_snapshots）用 use_alter 延迟创建 | 避免建表顺序死锁，autogenerate 兼容 | 迁移末尾 ALTER TABLE ADD CONSTRAINT |
+| 2026-08-24 | system_state 强制单例（id=1，CHECK id=1，迁移 seed） | 全局唯一 active snapshot 指针 | 迁移 INSERT ... ON CONFLICT DO NOTHING |
 
 ## 8. 验证记录
 
@@ -132,6 +138,7 @@ max_upload_bytes: 104857600
 | 2026-08-24 | Phase 0 后端质量门 | `uv run ruff check .`、`uv run ruff format --check .`、`uv run mypy app`、`uv run pytest -q` | ruff/check 通过；format 39 文件已格式化；mypy 26 文件无问题；pytest 20 通过 |
 | 2026-08-24 | Phase 0 前端质量门 | `npx oxlint src`、`npx tsc -b --noEmit`、`npx vitest run`、`npx vite build` | oxlint exit 0；typecheck ok；vitest 6 通过；build 成功 |
 | 2026-08-24 | Python 3.12 | `uv python install 3.12` | 安装 cpython-3.12.13 |
+| 2026-08-24 | Phase 1 ORM/迁移 | `uv run ruff check .`、`ruff format --check .`、`mypy app`(36)、`pytest -q`、`alembic upgrade head --sql`、`alembic downgrade 0001_initial:base --sql` | ruff/mypy 通过；44 单测通过、3 集成测试 skipped；迁移 SQL 可编译 |
 
 ## 9. 未决事项
 
