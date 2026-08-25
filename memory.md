@@ -14,6 +14,7 @@
 - 6 份 SHA-256 匹配的私有语料已真实重建：全部 `ready`，页数分别为 11/27/33/12/12/272，均有非零 Chunk；HTTP search 与 chat/citation 已命中真实论文内容。
 - 本机功能验收使用显式 fake embedding/reranker/LLM，以验证无网络的完整软件闭环；这不是 RTX 2060 真实模型质量或速度验收结果。
 - 私有 benchmark 数据契约 60 条通过，但 evidence label resolver 仍发现部分 PDF 文本锚点无法与 PyMuPDF 抽取文本可靠对齐，因此没有伪造 predictions/metrics，真实质量门仍未通过。
+- PDF Ingestion V2 规格已批准但尚未实现；实施必须从 `docs/pdf-ingestion-v2-spec.md` 的 V2-0 开始，逐阶段通过完成门后才可继续。
 
 - Phase 0 已完成：仓库、Python/uv 工程、前端工程、Docker Compose、配置加载、结构化日志、request id、health/live 与 health/ready、Ruff/mypy/pytest、前端 lint/typecheck/test/build、CI 工作流。
 - Phase 1 已完成：全部 ORM 模型、共享 enums、时间戳 mixin、Alembic async 配置与初始迁移 `0001_initial`。

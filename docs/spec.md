@@ -1,7 +1,7 @@
 # Paper RAG Assistant 技术规格
 
 > 状态：Approved for implementation（实现重新验收中）
-> 版本：1.1.0
+> 版本：1.2.0
 > 最后更新：2026-08-25
 > 目标环境：单机、单用户、NVIDIA RTX 2060（按 6 GB 显存预算）
 
@@ -292,6 +292,8 @@ ready|failed -> deleting -> deleted
 - 删除采用先标记 `deleting`、从检索 scope 排除，再异步清理。成功后删除数据库业务记录与上传文件；索引通过新快照去除对应 IDs。若清理失败，保持 `deleting` 并可重试。
 
 ## 11. Loader 规范
+
+PDF Ingestion V2 的 Canonical Document IR、layout parser、table-aware chunking、artifact、迁移、citation bbox 和 hard-case 验收以 [`docs/pdf-ingestion-v2-spec.md`](./pdf-ingestion-v2-spec.md) 为规范性补充。V2 实施必须保持本文件的数据安全、版本切换和 RAG 不变量；补充规格未明确覆盖的行为仍以本文件为准。
 
 ### 11.1 接口
 

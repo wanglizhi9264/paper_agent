@@ -1,7 +1,7 @@
 # Paper RAG Assistant 开发提案
 
 > 状态：Approved（恢复实施中）
-> 版本：1.1.0
+> 版本：1.2.0
 > 最后更新：2026-08-25
 > 对应规格：[`docs/spec.md`](./spec.md)
 
@@ -325,3 +325,11 @@ P2：多用户权限、向量数据库、agent、知识图谱、联网文献搜�
 7. R7 Release：全新环境 E2E、质量门、README/architecture/troubleshooting、提交推送。
 
 每个恢复切片必须包含实现、契约测试、集成验证和 memory 记录；只完成类或纯函数不算完成。
+
+## 17. PDF Ingestion V2 架构升级
+
+2026-08-25 的私有 6 文档 / 60 问题验证中，52 个可回答样本仅 41 个能解析完整 evidence label。11 个 hard cases 中前 10 个主要由表格、版面、Unicode 和段落重建导致，第 11 个由多轮 query rewrite 与 table retrieval 导致。这不是继续增加 PDF 正则即可关闭的缺陷。
+
+批准按 [`docs/pdf-ingestion-v2-spec.md`](./pdf-ingestion-v2-spec.md) 实施：项目自有 Canonical Document IR；PyMuPDF fast path；Docling layout parser；MinerU 隔离 challenger；table parent/row/group chunk；row-first retrieval + parent expansion；page/bbox/cell citation；结构化多轮 rewrite。
+
+实施顺序固定为 V2-0 至 V2-8。完成门为 11/11 hard cases、52/52 answerable labels 和完整 60 题 baseline；任一门未通过不得声明 PDF Ingestion V2 完成。
