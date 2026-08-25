@@ -75,10 +75,9 @@ def get_pdf_parser(settings: Any | None = None) -> DocumentParser:
                 "MinerU selected but PAPER_RAG_MINERU_ENABLED is false",
                 code=PDF_PARSER_UNAVAILABLE,
             )
-        raise ParseError(
-            "MinerU challenger adapter is not implemented until V2-4",
-            code=PDF_PARSER_UNAVAILABLE,
-        )
+        from app.loaders.mineru_adapter import MinerUParser
+
+        return MinerUParser.from_settings(settings)
     raise ParseError(f"unknown pdf parser '{name}'", code=PDF_PARSER_UNAVAILABLE)
 
 

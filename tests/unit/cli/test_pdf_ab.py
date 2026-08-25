@@ -102,11 +102,45 @@ def test_docling_candidate_writes_artifacts_without_real_models(
     assert (tmp_path / "docling" / "quality.json").exists()
 
 
-def test_mineru_rejected_until_v2_4(tmp_path: Path) -> None:
-    result = _run(
-        ["--input", str(FIXTURE), "--parsers", "pymupdf,mineru", "--output", str(tmp_path)]
+def test_mineru_candidate_uses_adapter(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    ir = make_ir(
+        manifest=make_manifest(
+            parser_id="mineru",
+            parser_version="isolated-cli",
+            model_revisions={"pipeline": "operator-pinned"},
+        )
     )
-    assert result.returncode == 2
+
+    class FakeMinerUParser:
+        def parse(self, _path: Path, *, document_id: object):
+            del document_id
+            return ir
+
+    monkeypatch.setattr(pdf_ab, "_build_parser", lambda _name: FakeMinerUParser())
+    entry = pdf_ab._run_one_parser(
+        "mineru", FIXTURE, uuid4(), tmp_path, ["Sample paragraph"], None
+    )
+    assert entry["ok"] is True
+    assert entry["parser_manifest"]["parser_id"] == "mineru"
+    assert (tmp_path / "mineru" / "document_ir.json").exists()
+
+
+def test_mineru_challenger_conclusion_is_explicit() -> None:
+    entries = {
+        "docling": {"ok": True, "anchors": {"found": ["FID"]}},
+        "mineru": {"ok": True, "anchors": {"found": ["FID", "9.46"]}},
+    }
+    assert pdf_ab._challenger_conclusion(entries, ["FID", "9.46"]) == {
+        "status": "improved",
+        "reason": "EVIDENCE_ANCHOR_COUNT",
+        "docling_found": 1,
+        "mineru_found": 2,
+        "anchor_count": 2,
+    }
+    assert pdf_ab._challenger_conclusion(entries, []) == {
+        "status": "pending",
+        "reason": "NO_EVIDENCE_ANCHORS",
+    }
 
 
 def test_unknown_parser_rejected(tmp_path: Path) -> None:

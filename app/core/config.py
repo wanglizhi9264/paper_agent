@@ -81,6 +81,14 @@ class Settings(BaseSettings):
     docling_table_revision: str = Field(default="")
     docling_artifacts_path: str = ""
 
+    # --- MinerU isolated challenger (spec pdf-ingestion-v2 §7.3, §14) ---
+    mineru_enabled: bool = False
+    mineru_command: str = "mineru"
+    mineru_backend: str = "pipeline"
+    mineru_timeout_seconds: int = 900
+    mineru_parser_version: str = ""
+    mineru_model_revision: str = ""
+
     # --- Server ---
     host: str = "127.0.0.1"
     port: int = 8000
@@ -114,6 +122,17 @@ class Settings(BaseSettings):
             raise ValueError("PAPER_RAG_DOCLING_DEVICE must not be empty")
         if self.docling_device.lower() not in {"cpu", "cuda:0", "auto"}:
             raise ValueError("PAPER_RAG_DOCLING_DEVICE must be one of cpu|cuda:0|auto")
+        if self.mineru_timeout_seconds < 1:
+            raise ValueError("PAPER_RAG_MINERU_TIMEOUT_SECONDS must be >= 1")
+        if self.pdf_parser == "mineru" and not self.mineru_enabled:
+            raise ValueError("PAPER_RAG_MINERU_ENABLED must be true when MinerU is selected")
+        if self.pdf_parser == "mineru" and (
+            not self.mineru_parser_version or not self.mineru_model_revision
+        ):
+            raise ValueError(
+                "PAPER_RAG_MINERU_PARSER_VERSION and PAPER_RAG_MINERU_MODEL_REVISION "
+                "must be pinned when MinerU is selected"
+            )
         return self
 
     @property

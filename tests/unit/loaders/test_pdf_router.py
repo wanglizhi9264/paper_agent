@@ -45,10 +45,9 @@ class TestGetPdfParser:
         with pytest.raises(ParseError):
             get_pdf_parser(_settings(pdf_parser="mineru", mineru_enabled=False))
 
-    def test_mineru_enabled_still_unavailable_until_v2_4(self) -> None:
-        with pytest.raises(ParseError) as exc_info:
-            get_pdf_parser(_settings(pdf_parser="mineru", mineru_enabled=True))
-        assert "V2-4" in str(exc_info.value)
+    def test_mineru_enabled_returns_isolated_adapter(self) -> None:
+        parser = get_pdf_parser(_settings(pdf_parser="mineru", mineru_enabled=True))
+        assert type(parser).__name__ == "MinerUParser"
 
     def test_settings_validation_rejects_unknown_parser(self) -> None:
         from app.core.config import Settings
@@ -123,6 +122,12 @@ def _settings(**overrides: Any) -> Any:
         "pdf_max_orphan_numeric_ratio": 0.05,
         "pdf_max_replacement_characters": 0,
         "mineru_enabled": False,
+        "mineru_command": "mineru",
+        "mineru_backend": "pipeline",
+        "mineru_timeout_seconds": 900,
+        "mineru_parser_version": "isolated-cli",
+        "mineru_model_revision": "operator-pinned",
+        "storage_dir": "/tmp/paper-rag-test-storage",
     }
     defaults.update(overrides)
     return type("S", (), defaults)()

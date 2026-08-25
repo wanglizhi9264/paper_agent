@@ -1,7 +1,7 @@
 # PDF Ingestion V2 跨机器交接与验收手册
 
-> 状态：V2-0～V2-2 已验收；V2-3 代码与确定性测试已完成，等待目标机器的真实 Docling smoke 和私有论文 A/B
-> 停止边界：本次不实施 V2-4
+> 状态：V2-0～V2-2 已验收；V2-3 环境门仍待目标机器执行；V2-4 编码交付已完成，真实 MinerU/私有 A/B 待执行
+> 环境说明：2026-08-26 按用户指令仅完成编码，不安装模型环境；所有未执行环境门保持 pending
 > 规范来源：[`docs/pdf-ingestion-v2-spec.md`](./pdf-ingestion-v2-spec.md)
 
 本文用于把仓库拉到另一台 Windows/Python 3.12 机器后，无歧义地完成 V2-3 的环境验收，然后把后续阶段交给其他代码代理。本文不放宽主规格的完成门。
@@ -14,10 +14,25 @@
 | V2-1 | 已完成 | Canonical Document IR、normalizer、validator、serializer、Markdown | 无 |
 | V2-2 | 已完成 | PyMuPDF V2 adapter、fast-path quality routing、legacy bridge | 无 |
 | V2-3 | 代码完成/环境门待跑 | Docling 2.121.0 adapter、router、setup CLI、A/B CLI、fake conversion tests、model smoke | Docling 模型下载、revision 固定、真实 fixture smoke、六论文 A/B |
-| V2-4 | 未实施 | 无；router/CLI 必须明确拒绝 MinerU | 由下一个代理实施 |
+| V2-4 | 编码完成/环境门待跑 | 隔离 adapter、subprocess 安全、fake tests、显式 smoke、A/B 结论字段 | 独立 MinerU 与私有 unresolved cases A/B |
 | V2-5～V2-8 | 未实施 | 见主规格第 19 节 | 按阶段完成门实施 |
 
 禁止在 V2-3 真实 smoke 和 A/B 失败时宣布 V2-3 验收完成，也禁止为规避失败而直接进入 V2-4。
+
+当前用户已于 2026-08-26 明确将本机任务调整为“只完成编码、不安装环境”。因此 V2-4
+代码可以落地并接受 deterministic review，但 V2-3/V2-4 的真实环境门仍是 pending，不能据此
+宣称发布验收通过。
+
+### 1.1 V2-4 编码交付
+
+- `app/loaders/mineru_adapter.py` 通过 argv list 调用独立 MinerU CLI，不使用 shell；输入限制在
+  `storage/uploads`，输出限制在单次 `storage/tmp/mineru/<document_id>`，超时和退出码映射为稳定错误。
+- adapter 接受 MinerU content-list JSON/HTML 或 Markdown table，转换为 Canonical Document IR 后运行 validator。
+- `pdf_ab` 已允许显式 MinerU challenger，并在 comparison 中输出
+  `improved|equivalent|regressed|pending`，没有 anchors 或真实结果时不会猜测结论。
+- 显式 smoke：先把公开 fixture 复制到配置的 uploads 目录，再设置
+  `PAPER_RAG_RUN_MINERU_SMOKE=1`、启用并固定隔离 MinerU 版本，运行
+  `uv run pytest -m model_smoke tests/model_smoke/pdf_v2/test_mineru_isolated_smoke.py -v`。
 
 ## 2. V2-3 实现契约
 

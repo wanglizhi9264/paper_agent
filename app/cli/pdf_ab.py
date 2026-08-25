@@ -154,10 +154,47 @@ def _build_parser(name: str) -> Any:
         from app.loaders.docling_adapter import DoclingParser
 
         return DoclingParser.from_settings(get_settings())
-    raise ParseError(
-        f"parser '{name}' is not available (mineru arrives in V2-4)",
-        code="PDF_PARSER_UNAVAILABLE",
-    )
+    if name == "mineru":
+        from app.core.config import get_settings
+        from app.loaders.mineru_adapter import MinerUParser
+
+        settings = get_settings()
+        if not settings.mineru_enabled:
+            raise ParseError(
+                "MinerU A/B requires PAPER_RAG_MINERU_ENABLED=true",
+                code="PDF_PARSER_UNAVAILABLE",
+            )
+        return MinerUParser.from_settings(settings)
+    raise ParseError(f"parser '{name}' is not available", code="PDF_PARSER_UNAVAILABLE")
+
+
+def _challenger_conclusion(entries: dict[str, Any], anchors: list[str]) -> dict[str, Any] | None:
+    """Summarize whether MinerU improves unresolved Docling evidence anchors."""
+    if "mineru" not in entries:
+        return None
+    docling = entries.get("docling")
+    mineru = entries["mineru"]
+    if not anchors:
+        return {"status": "pending", "reason": "NO_EVIDENCE_ANCHORS"}
+    if not isinstance(docling, dict) or not docling.get("ok"):
+        return {"status": "pending", "reason": "DOCLING_RESULT_UNAVAILABLE"}
+    if not mineru.get("ok"):
+        return {"status": "pending", "reason": "MINERU_RESULT_UNAVAILABLE"}
+    docling_found = len(docling["anchors"]["found"])
+    mineru_found = len(mineru["anchors"]["found"])
+    if mineru_found > docling_found:
+        status = "improved"
+    elif mineru_found < docling_found:
+        status = "regressed"
+    else:
+        status = "equivalent"
+    return {
+        "status": status,
+        "reason": "EVIDENCE_ANCHOR_COUNT",
+        "docling_found": docling_found,
+        "mineru_found": mineru_found,
+        "anchor_count": len(anchors),
+    }
 
 
 def _element_stats(ir: DocumentIR, pages_filter: list[int] | None) -> dict[str, Any]:
@@ -287,10 +324,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"input PDF not found: {pdf_path.name}", file=sys.stderr)
         return 2
     names = [n.strip().lower() for n in args.parsers.split(",") if n.strip()]
-    if any(n == "mineru" for n in names):
-        print("mineru is not implemented until V2-4", file=sys.stderr)
-        return 2
-    unknown = [n for n in names if n not in {"pymupdf", "docling"}]
+    unknown = [n for n in names if n not in {"pymupdf", "docling", "mineru"}]
     if unknown:
         print(f"unknown parsers: {', '.join(unknown)}", file=sys.stderr)
         return 2
@@ -319,7 +353,8 @@ def main(argv: list[str] | None = None) -> int:
             name, pdf_path, document_id, output_dir, anchors, pages_filter
         )
 
-    comparison = {**manifest, "results": entries}
+    challenger = _challenger_conclusion(entries, anchors)
+    comparison = {**manifest, "results": entries, "mineru_challenger": challenger}
     (output_dir / "comparison.json").write_text(
         json.dumps(comparison, ensure_ascii=False, indent=2), encoding="utf-8"
     )
@@ -340,6 +375,15 @@ def main(argv: list[str] | None = None) -> int:
             )
         else:
             lines.append(f"| {name} | no | - | - | - | - | - | {entry.get('error_code')} |")
+    if challenger is not None:
+        lines.extend(
+            [
+                "",
+                "## MinerU challenger conclusion",
+                "",
+                f"Status: `{challenger['status']}` ({challenger['reason']}).",
+            ]
+        )
     (output_dir / "comparison.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     manifest_path = output_dir / "manifest.json"
