@@ -157,4 +157,3 @@ def test_subprocess_result_is_loaded_without_logging_content(
     ir = parser.parse(pdf, document_id=uuid4())
     assert ir.quality.table_count == 1
     assert not validate_document_ir(ir).issues
-

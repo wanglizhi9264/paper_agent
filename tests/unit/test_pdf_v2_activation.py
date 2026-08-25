@@ -143,4 +143,3 @@ async def test_failed_reindex_keeps_old_version_and_snapshot(
     assert document.active_document_version_id == old_version_id
     await async_sqlite_session.refresh(state)
     assert state.active_index_snapshot_id == old_snapshot_id
-
