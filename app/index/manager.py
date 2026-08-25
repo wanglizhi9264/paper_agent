@@ -11,7 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.embedding.base import EmbeddingProvider
 from app.index.faiss_index import FaissIndex
-from app.index.snapshot import build_manifest, save_manifest, validate_manifest
+from app.index.snapshot import (
+    atomic_activate_snapshot,
+    build_manifest,
+    save_manifest,
+    validate_manifest,
+)
 from app.models.chunk import Chunk, DocumentVersion
 from app.models.document import Document
 from app.models.enums import DocumentStatus, DocumentVersionStatus, IndexSnapshotStatus
@@ -30,6 +35,8 @@ async def build_corpus_snapshot(
     """Build one immutable FAISS/BM25 snapshot for the whole compatible corpus."""
     await session.flush()
     manifest_model = embedding_provider.manifest
+    if pending_version.ir_schema_version == 2 and not pending_version.parser_signature:
+        raise ValueError("V2 DocumentVersion requires parser_signature before snapshot build")
 
     rows = (
         await session.execute(
@@ -60,7 +67,13 @@ async def build_corpus_snapshot(
     chunkable = [
         chunk
         for chunk in chunks
-        if not (chunk.metadata_ and chunk.metadata_.get("code_not_add_index"))
+        if not (
+            chunk.metadata_
+            and (
+                chunk.metadata_.get("code_not_add_index")
+                or chunk.metadata_.get("chunk_subtype") == "table_parent"
+            )
+        )
     ]
     if not chunkable:
         raise ValueError("cannot activate an empty corpus snapshot")
@@ -125,9 +138,20 @@ async def build_corpus_snapshot(
     ).stats.n_docs != len(chunkable):
         raise ValueError("BM25 snapshot validation failed")
 
+    active_dir = indexes_dir / "versions" / str(snapshot_id)
+    atomic_activate_snapshot(
+        building_dir=building_dir,
+        active_dir=active_dir,
+        faiss_filename=faiss_path.name,
+        manifest_filename=manifest_path.name,
+        bm25_filename=bm25_path.name,
+    )
+    faiss_path = active_dir / faiss_path.name
+    bm25_path = active_dir / bm25_path.name
+
     snapshot = IndexSnapshot(
         id=snapshot_id,
-        status=IndexSnapshotStatus.ACTIVE,
+        status=IndexSnapshotStatus.BUILDING,
         embedding_signature=manifest_model.signature,
         faiss_path=str(faiss_path),
         bm25_path=str(bm25_path),
@@ -136,18 +160,36 @@ async def build_corpus_snapshot(
         document_count=len(version_map),
         chunk_count=len(chunkable),
         max_faiss_id=max(assigned_ids),
-        activated_at=datetime.now(UTC),
+        activated_at=None,
     )
     session.add(snapshot)
     await session.flush()
 
+    return snapshot
+
+
+async def activate_snapshot_record(
+    session: AsyncSession, snapshot: IndexSnapshot
+) -> None:
+    """Switch the singleton DB pointer after shadow files have been activated."""
+    if snapshot.status != IndexSnapshotStatus.BUILDING:
+        raise ValueError("only a building snapshot can be activated")
     state = await session.get(SystemState, 1)
     if state is None:
         state = SystemState(id=1)
         session.add(state)
-    if state.active_index_snapshot_id is not None:
+    prior_active_snapshot_id = state.active_index_snapshot_id
+    if prior_active_snapshot_id is not None:
         old = await session.get(IndexSnapshot, state.active_index_snapshot_id)
         if old is not None and old.status == IndexSnapshotStatus.ACTIVE:
             old.status = IndexSnapshotStatus.SUPERSEDED
     state.active_index_snapshot_id = snapshot.id
-    return snapshot
+    snapshot.manifest = {
+        **(snapshot.manifest or {}),
+        "prior_active_snapshot_id": (
+            str(prior_active_snapshot_id) if prior_active_snapshot_id is not None else None
+        ),
+    }
+    snapshot.status = IndexSnapshotStatus.ACTIVE
+    snapshot.activated_at = datetime.now(UTC)
+    await session.flush()

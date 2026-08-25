@@ -22,7 +22,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
 
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
@@ -119,6 +119,64 @@ class RealDocumentParser:
             raise PipelineError("document contains no extractable text", code="EMPTY_DOCUMENT")
         document.title = parsed.title or Path(document.filename).stem
         return page_count, character_count
+
+
+class V2PDFDocumentParser:
+    """Parse one PDF to Canonical IR and stage its immutable artifacts."""
+
+    def __init__(
+        self,
+        path: Path,
+        artifact_manager: Any,
+        *,
+        settings: Any | None = None,
+        parser: Any | None = None,
+    ) -> None:
+        self._path = path
+        self._artifact_manager = artifact_manager
+        self._settings = settings
+        self._parser = parser
+        self.parsed_document: Any | None = None
+        self.version = "pdf-ir-v2"
+
+    def parse(self, document: Document) -> tuple[int, int]:
+        del document
+        raise PipelineError(
+            "V2 PDF parsing requires a building DocumentVersion", code="PDF_LAYOUT_INVALID"
+        )
+
+    def parse_version(
+        self, document: Document, version: DocumentVersion
+    ) -> tuple[int, int]:
+        from app.document_ir.errors import ParseError
+        from app.document_ir.validate import validate_document_ir
+        from app.loaders.pdf_router import get_pdf_parser
+
+        parser = self._parser or get_pdf_parser(self._settings)
+        try:
+            ir = parser.parse(self._path, document_id=document.id)
+            if validate_document_ir(ir).issues:
+                raise PipelineError(
+                    "PDF parser output failed Canonical IR validation",
+                    code="PDF_LAYOUT_INVALID",
+                )
+            staged = self._artifact_manager.stage(version.id, ir)
+        except ParseError as exc:
+            raise PipelineError(str(exc), code=exc.code) from exc
+        self.parsed_document = ir
+        self.version = ir.parser.parser_version
+        version.parser_version = ir.parser.parser_version
+        version.parser_id = ir.parser.parser_id
+        version.parser_signature = ir.parser.signature
+        version.ir_schema_version = ir.schema_version
+        version.ir_path = staged.ir_relative_path
+        version.ir_sha256 = staged.ir_sha256
+        version.parse_quality = ir.quality.model_dump(mode="json")
+        document.title = ir.title or Path(document.filename).stem
+        character_count = sum(len(element.raw_text) for element in ir.elements)
+        if character_count <= 0:
+            raise PipelineError("document contains no extractable text", code="EMPTY_DOCUMENT")
+        return len(ir.pages), character_count
 
 
 class RealChunker:
@@ -244,6 +302,37 @@ async def _set_doc_status(
     document.status_message = message
 
 
+async def _restore_prior_activation(
+    session: AsyncSession,
+    document: Document,
+    prior_version_id: uuid.UUID | None,
+    new_snapshot: Any | None,
+) -> None:
+    """Restore DB pointers/statuses when finalization fails after file moves."""
+    document.active_document_version_id = prior_version_id
+    if prior_version_id is not None:
+        prior = await session.get(DocumentVersion, prior_version_id)
+        if prior is not None:
+            prior.status = DocumentVersionStatus.READY
+    if new_snapshot is None:
+        return
+    from app.models.enums import IndexSnapshotStatus
+    from app.models.index_snapshot import IndexSnapshot, SystemState
+
+    new_snapshot.status = IndexSnapshotStatus.FAILED
+    state = await session.get(SystemState, 1)
+    if state is not None and state.active_index_snapshot_id == new_snapshot.id:
+        manifest = new_snapshot.manifest or {}
+        prior_snapshot_id = manifest.get("prior_active_snapshot_id")
+        state.active_index_snapshot_id = (
+            uuid.UUID(prior_snapshot_id) if isinstance(prior_snapshot_id, str) else None
+        )
+        if state.active_index_snapshot_id is not None:
+            old = await session.get(IndexSnapshot, state.active_index_snapshot_id)
+            if old is not None:
+                old.status = IndexSnapshotStatus.ACTIVE
+
+
 async def run_ingest(
     session: AsyncSession,
     job: IngestionJob,
@@ -253,6 +342,7 @@ async def run_ingest(
     chunker: FakeChunker = _DefaultFakeChunker(),
     embedding_provider: Any | None = None,
     indexes_dir: Path | None = None,
+    artifact_manager: Any | None = None,
 ) -> None:
     """Drive one ingest/reindex job through the full state machine.
 
@@ -269,18 +359,14 @@ async def run_ingest(
         return
     prior_active_version_id = document.active_document_version_id
     parser_version = getattr(parser, "version", FAKE_PARSER_VERSION)
+    version: DocumentVersion | None = None
+    new_snapshot: Any | None = None
     await _pg_advisory_lock(session, _doc_lock_key(document.id))
     await _set_job(session, job, status=JobStatus.RUNNING, stage=JobStage.QUEUED, progress=5)
     await _set_doc_status(document, DocumentStatus.PARSING)
     await _set_job(session, job, status=JobStatus.RUNNING, stage=JobStage.PARSING, progress=20)
     try:
-        page_count, char_count = parser.parse(document)
-        document.page_count = page_count
-        document.character_count = char_count
-
-        await _set_doc_status(document, DocumentStatus.CHUNKING)
-        await _set_job(session, job, status=JobStatus.RUNNING, stage=JobStage.CHUNKING, progress=45)
-
+        # A building version exists before PDF parse so artifact paths are version-scoped.
         version = DocumentVersion(
             document_id=document.id,
             status=DocumentVersionStatus.BUILDING,
@@ -290,6 +376,17 @@ async def run_ingest(
         )
         session.add(version)
         await session.flush()
+
+        parse_version = getattr(parser, "parse_version", None)
+        if callable(parse_version):
+            page_count, char_count = parse_version(document, version)
+        else:
+            page_count, char_count = parser.parse(document)
+        document.page_count = page_count
+        document.character_count = char_count
+
+        await _set_doc_status(document, DocumentStatus.CHUNKING)
+        await _set_job(session, job, status=JobStatus.RUNNING, stage=JobStage.CHUNKING, progress=45)
 
         chunk_count = chunker.chunk(document, version)
         version.chunk_count = chunk_count
@@ -314,7 +411,7 @@ async def run_ingest(
             )
             from app.index.manager import build_corpus_snapshot
 
-            await build_corpus_snapshot(
+            new_snapshot = await build_corpus_snapshot(
                 session,
                 pending_document=document,
                 pending_version=version,
@@ -331,10 +428,32 @@ async def run_ingest(
                 session, job, status=JobStatus.RUNNING, stage=JobStage.INDEXING, progress=90
             )
 
-        # Finalize: mark version ready and atomically switch the document pointer.
+        # Move validated filesystem artifacts before switching DB pointers. If the
+        # transaction later fails, startup reconciliation quarantines the orphan.
+        if artifact_manager is not None and version.ir_path is not None:
+            if version.parser_signature is None:
+                raise PipelineError("V2 version has no parser signature", code="IR_ARTIFACT_INVALID")
+            try:
+                activated = artifact_manager.activate(version.id, version.parser_signature)
+            except Exception as exc:
+                code = str(getattr(exc, "code", "IR_ARTIFACT_INVALID"))
+                raise PipelineError("IR artifact activation failed", code=code) from exc
+            version.ir_path = activated.ir_relative_path
+            version.ir_sha256 = activated.ir_sha256
+
+        if new_snapshot is not None:
+            from app.index.manager import activate_snapshot_record
+
+            await activate_snapshot_record(session, new_snapshot)
+
+        # Finalize atomically in the current DB transaction.
         version.status = DocumentVersionStatus.READY
+        if prior_active_version_id is not None:
+            prior = await session.get(DocumentVersion, prior_active_version_id)
+            if prior is not None and prior.id != version.id:
+                prior.status = DocumentVersionStatus.SUPERSEDED
         document.active_document_version_id = version.id
-        document.parser_version = parser_version
+        document.parser_version = version.parser_version or parser_version
         document.chunk_count = chunk_count
         await _set_doc_status(document, DocumentStatus.READY)
         await _set_job(
@@ -350,6 +469,21 @@ async def run_ingest(
             chunk_count=chunk_count,
         )
     except PipelineError as exc:
+        if version is not None:
+            version.status = DocumentVersionStatus.FAILED
+            version.failed_at = datetime.now(UTC)
+        await _restore_prior_activation(
+            session, document, prior_active_version_id, new_snapshot
+        )
+        if artifact_manager is not None and version is not None:
+            try:
+                artifact_manager.fail(version.id, job.id)
+            except Exception:
+                logger.exception(
+                    "ir_artifact_failure_recovery_failed",
+                    document_id=str(document.id),
+                    job_id=str(job.id),
+                )
         await _set_job(
             session,
             job,
@@ -371,6 +505,21 @@ async def run_ingest(
             code=exc.code,
         )
     except Exception as exc:
+        if version is not None:
+            version.status = DocumentVersionStatus.FAILED
+            version.failed_at = datetime.now(UTC)
+        await _restore_prior_activation(
+            session, document, prior_active_version_id, new_snapshot
+        )
+        if artifact_manager is not None and version is not None:
+            try:
+                artifact_manager.fail(version.id, job.id)
+            except Exception:
+                logger.exception(
+                    "ir_artifact_crash_recovery_failed",
+                    document_id=str(document.id),
+                    job_id=str(job.id),
+                )
         await _set_job(
             session,
             job,
@@ -394,6 +543,7 @@ async def run_delete_cleanup(
     document: Document,
     *,
     file_remover: FileRemover,
+    artifact_remover: Any | None = None,
 ) -> None:
     """Mark a document deleted and remove its upload file.
 
@@ -413,6 +563,20 @@ async def run_delete_cleanup(
         await session.execute(
             sa_delete(CollectionDocument).where(CollectionDocument.document_id == document.id)
         )
+        if artifact_remover is not None:
+            version_ids = (
+                (
+                    await session.execute(
+                        select(DocumentVersion.id).where(
+                            DocumentVersion.document_id == document.id
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            for version_id in version_ids:
+                artifact_remover(version_id)
         # Mark deleted (row remains for audit; hard delete deferred to compaction).
         await _set_doc_status(document, DocumentStatus.DELETED)
         document.active_document_version_id = None

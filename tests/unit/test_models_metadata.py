@@ -105,3 +105,15 @@ def test_check_constraints_present() -> None:
     chunk_names = {c.name for c in chunks.constraints if hasattr(c, "name")}
     assert "ck_chunk_faiss_id_nonneg" in chunk_names
     assert "ck_chunk_page_order" in chunk_names
+
+    versions = Base.metadata.tables["document_versions"]
+    assert {
+        "parser_id",
+        "parser_signature",
+        "ir_schema_version",
+        "ir_path",
+        "ir_sha256",
+        "parse_quality",
+    }.issubset(versions.c.keys())
+    version_names = {c.name for c in versions.constraints if hasattr(c, "name")}
+    assert "ck_docversion_ir_schema_positive" in version_names

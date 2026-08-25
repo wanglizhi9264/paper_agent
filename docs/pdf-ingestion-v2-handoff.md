@@ -16,7 +16,8 @@
 | V2-3 | 代码完成/环境门待跑 | Docling 2.121.0 adapter、router、setup CLI、A/B CLI、fake conversion tests、model smoke | Docling 模型下载、revision 固定、真实 fixture smoke、六论文 A/B |
 | V2-4 | 编码完成/环境门待跑 | 隔离 adapter、subprocess 安全、fake tests、显式 smoke、A/B 结论字段 | 独立 MinerU 与私有 unresolved cases A/B |
 | V2-5 | 编码完成/私有门待跑 | IR-native table parent/row/group、metadata、ORM parent mapping、synthetic hard-case contracts | 私有 10 ingestion hard cases |
-| V2-6～V2-8 | 未实施 | 见主规格第 19 节 | 按阶段完成门实施 |
+| V2-6 | 编码完成/运行门待跑 | migration 0002、ORM、IR manager、PDF worker activation、snapshot atomic switch、recovery contracts | PostgreSQL round-trip 与 production E2E |
+| V2-7～V2-8 | 未实施 | 见主规格第 19 节 | 按阶段完成门实施 |
 
 禁止在 V2-3 真实 smoke 和 A/B 失败时宣布 V2-3 验收完成，也禁止为规避失败而直接进入 V2-4。
 
@@ -45,6 +46,16 @@
 - `RealChunker` 先分配全部 ORM chunk UUID，再校验并解析 parent/chapter index；缺失父项使整个构建失败。
 - 9 个表格 hard case 加 `13.61/13.09 min` 的公开 synthetic contract proxies 已编码；
   私有 10-case 完成门未执行，保持 pending。
+
+### 1.3 V2-6 编码交付
+
+- `0002_pdf_ingestion_v2` 仅增加 nullable V2 列、parser signature index 和正 schema CHECK，
+  downgrade 仅移除本 migration 对象；integration contract 覆盖 upgrade/downgrade/upgrade。
+- PDF worker 已从 legacy Paragraph loader 切到 router → Canonical IR → IR-native chunker；DOCX/Markdown 不变。
+- IR 先写 building 并校验 hash/schema/quality，再原子 rename 到 immutable versions 路径；delete 清理版本 artifact。
+- corpus snapshot 先完整校验并原子移动目录，随后才在同一 DB transaction 切换 snapshot/version/document pointers。
+- finalization 失败恢复旧指针和状态；worker startup 标记 stale building rows failed 并隔离 staged/orphan IR。
+- PostgreSQL migration、FAISS integration 和真实 worker E2E 因未安装环境均为 pending。
 
 ## 2. V2-3 实现契约
 

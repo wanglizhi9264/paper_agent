@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.logging import get_logger
 from app.index.snapshot import SnapshotManifest, load_manifest, validate_manifest
 from app.models.chunk import DocumentVersion
-from app.models.enums import DocumentStatus, DocumentVersionStatus
+from app.models.enums import DocumentStatus, DocumentVersionStatus, IndexSnapshotStatus
 from app.models.index_snapshot import IndexSnapshot, SystemState
 
 logger = get_logger(__name__)
@@ -139,6 +139,56 @@ async def reconcile_stale_jobs(session: AsyncSession) -> int:
         await session.flush()
         logger.warning("reconciled_stale_jobs", count=count)
     return count
+
+
+async def reconcile_v2_builds(session: AsyncSession, artifact_manager: object) -> tuple[int, int]:
+    """Fail stale building versions/snapshots and quarantine staged IR on restart."""
+    from datetime import UTC, datetime
+
+    versions = list(
+        (
+            await session.execute(
+                select(DocumentVersion).where(
+                    DocumentVersion.status == DocumentVersionStatus.BUILDING
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    snapshots = list(
+        (
+            await session.execute(
+                select(IndexSnapshot).where(
+                    IndexSnapshot.status == IndexSnapshotStatus.BUILDING
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for version in versions:
+        version.status = DocumentVersionStatus.FAILED
+        version.failed_at = datetime.now(UTC)
+        fail = getattr(artifact_manager, "fail", None)
+        if callable(fail):
+            fail(version.id, version.id)
+    for snapshot in snapshots:
+        snapshot.status = IndexSnapshotStatus.FAILED
+    known_versions = set(
+        (
+            await session.execute(select(DocumentVersion.id))
+        ).scalars().all()
+    )
+    quarantine = getattr(artifact_manager, "quarantine_orphans", None)
+    if callable(quarantine):
+        quarantine(known_versions)
+    if versions or snapshots:
+        await session.flush()
+        logger.warning(
+            "reconciled_v2_builds", versions=len(versions), snapshots=len(snapshots)
+        )
+    return len(versions), len(snapshots)
 
 
 async def check_document_consistency(session: AsyncSession) -> list[str]:

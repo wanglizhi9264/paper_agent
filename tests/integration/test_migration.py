@@ -75,6 +75,49 @@ def _apply_migration(url: str) -> None:
     assert result.returncode == 0, result.stderr
 
 
+def _alembic(url: str, *args: str) -> None:
+    env = {**os.environ, "PAPER_RAG_DATABASE_URL": url}
+    result = subprocess.run(
+        [sys.executable, "-m", "alembic", *args],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_pdf_v2_migration_upgrade_downgrade_upgrade(isolated_db_url: str) -> None:
+    expected = {
+        "parser_id",
+        "parser_signature",
+        "ir_schema_version",
+        "ir_path",
+        "ir_sha256",
+        "parse_quality",
+    }
+
+    async def _columns() -> set[str]:
+        engine = create_async_engine(isolated_db_url)
+        try:
+            async with engine.connect() as conn:
+                return await conn.run_sync(
+                    lambda connection: {
+                        column["name"]
+                        for column in inspect(connection).get_columns("document_versions")
+                    }
+                )
+        finally:
+            await engine.dispose()
+
+    _alembic(isolated_db_url, "upgrade", "head")
+    assert expected.issubset(asyncio.run(_columns()))
+    _alembic(isolated_db_url, "downgrade", "0001_initial")
+    assert expected.isdisjoint(asyncio.run(_columns()))
+    _alembic(isolated_db_url, "upgrade", "head")
+    assert expected.issubset(asyncio.run(_columns()))
+
+
 def test_migration_applies_and_creates_all_tables(isolated_db_url: str) -> None:
     _apply_migration(isolated_db_url)
 

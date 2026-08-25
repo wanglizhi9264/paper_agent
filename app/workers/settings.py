@@ -21,9 +21,17 @@ class WorkerSettings:
 
     @staticmethod
     async def on_startup(ctx: dict[str, Any]) -> None:  # pragma: no cover
+        del ctx
         settings = get_settings()
         configure_logging(settings.log_level)
+        from app.db.session import session_scope
+        from app.services.consistency import reconcile_stale_jobs, reconcile_v2_builds
+        from app.services.ir_artifacts import IRArtifactManager
+
+        async with session_scope() as session:
+            await reconcile_stale_jobs(session)
+            await reconcile_v2_builds(session, IRArtifactManager(settings.storage_dir))
 
     @staticmethod
     async def on_shutdown(ctx: dict[str, Any]) -> None:  # pragma: no cover
-        pass
+        del ctx

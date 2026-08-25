@@ -194,22 +194,19 @@ def atomic_activate_snapshot(
 
     Uses atomic rename. Returns the active directory path.
     """
-    active_dir.mkdir(parents=True, exist_ok=True)
-    tmp_active = active_dir.with_suffix(".activating")
-    if tmp_active.exists():
-        import shutil
-
-        shutil.rmtree(tmp_active)
-    tmp_active.mkdir(parents=True)
-
-    for fname in [faiss_filename, manifest_filename, bm25_filename]:
-        if fname is None:
-            continue
-        src = building_dir / fname
-        dst = tmp_active / fname
-        if not src.exists():
-            continue
-        src.replace(dst)
-
+    required = [name for name in (faiss_filename, manifest_filename, bm25_filename) if name]
+    missing = [name for name in required if not (building_dir / name).is_file()]
+    if missing:
+        raise ManifestValidationError(
+            f"shadow snapshot missing required files: {', '.join(missing)}",
+            code="SNAPSHOT_FILES_MISSING",
+        )
+    active_dir.parent.mkdir(parents=True, exist_ok=True)
+    tmp_active = active_dir.parent / f".{active_dir.name}.activating"
+    if active_dir.exists() or tmp_active.exists():
+        raise ManifestValidationError(
+            "snapshot activation target already exists", code="SNAPSHOT_TARGET_EXISTS"
+        )
+    building_dir.replace(tmp_active)
     tmp_active.replace(active_dir)
     return active_dir

@@ -26,6 +26,7 @@ from app.services.ingestion import (
     FileRemover,
     RealChunker,
     RealDocumentParser,
+    V2PDFDocumentParser,
     run_delete_cleanup,
     run_ingest,
 )
@@ -63,10 +64,21 @@ async def ingestion_task(
         kind = job.kind if type(job.kind) is str else job.kind.value
         if kind in (JobKind.INGEST.value, JobKind.REINDEX.value):
             settings = get_settings()
-            parser = RealDocumentParser(
-                settings.uploads_dir / document.stored_filename,
-                document.extension,
-            )
+            artifact_manager = None
+            if document.extension == "pdf":
+                from app.services.ir_artifacts import IRArtifactManager
+
+                artifact_manager = IRArtifactManager(settings.storage_dir)
+                parser = V2PDFDocumentParser(
+                    settings.uploads_dir / document.stored_filename,
+                    artifact_manager,
+                    settings=settings,
+                )
+            else:
+                parser = RealDocumentParser(
+                    settings.uploads_dir / document.stored_filename,
+                    document.extension,
+                )
             await run_ingest(
                 session,
                 job,
@@ -75,14 +87,19 @@ async def ingestion_task(
                 chunker=RealChunker(parser),
                 embedding_provider=get_embedding_provider(settings),
                 indexes_dir=settings.indexes_dir,
+                artifact_manager=artifact_manager,
             )
         elif kind == JobKind.DELETE_CLEANUP.value:
             settings = get_settings()
+            from app.services.ir_artifacts import IRArtifactManager
+
+            artifact_manager = IRArtifactManager(settings.storage_dir)
             await run_delete_cleanup(
                 session,
                 job,
                 document,
                 file_remover=_make_file_remover(settings.uploads_dir),
+                artifact_remover=artifact_manager.remove_version,
             )
         else:
             raise RuntimeError(f"unknown job kind: {kind}")

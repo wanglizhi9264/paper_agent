@@ -20,6 +20,7 @@ from app.services.consistency import (
     check_document_consistency,
     check_index_health,
     reconcile_stale_jobs,
+    reconcile_v2_builds,
 )
 
 
@@ -185,6 +186,38 @@ async def test_reconcile_stale_jobs(async_sqlite_session) -> None:
 
     await async_sqlite_session.refresh(job2)
     assert job2.status == JobStatus.QUEUED
+
+
+@pytest.mark.asyncio
+async def test_reconcile_v2_builds_marks_failed_and_quarantines(
+    async_sqlite_session, tmp_path
+) -> None:
+    from app.services.ir_artifacts import IRArtifactManager
+    from tests.unit.document_ir.builders import make_element, make_ir
+
+    document = _make_doc(async_sqlite_session, status=DocumentStatus.PARSING)
+    version = DocumentVersion(
+        id=uuid.uuid4(),
+        document_id=document.id,
+        status=DocumentVersionStatus.BUILDING,
+        chunk_config={},
+    )
+    snapshot = IndexSnapshot(
+        id=uuid.uuid4(),
+        status=IndexSnapshotStatus.BUILDING,
+        embedding_signature="sig",
+        faiss_path=str(tmp_path / "building.faiss"),
+        manifest={},
+    )
+    async_sqlite_session.add_all([version, snapshot])
+    await async_sqlite_session.flush()
+    manager = IRArtifactManager(tmp_path)
+    manager.stage(version.id, make_ir(document_id=document.id, elements=[make_element()]))
+
+    assert await reconcile_v2_builds(async_sqlite_session, manager) == (1, 1)
+    assert version.status == DocumentVersionStatus.FAILED
+    assert snapshot.status == IndexSnapshotStatus.FAILED
+    assert not (tmp_path / "ir" / "building" / str(version.id)).exists()
 
 
 @pytest.mark.asyncio

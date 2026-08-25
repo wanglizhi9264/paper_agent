@@ -20,6 +20,7 @@
 - V2-3（Docling Adapter）的代码与确定性测试已完成：精确固定 `docling==2.121.0`（MIT），`uv.lock` 相对 V2-2 为 +924/-43 行；实现 Docling JSON → Canonical Document IR、bbox/reading order/section path/table cell provenance、Docling router、显式 model setup/revision pin CLI、PyMuPDF/Docling A/B CLI、fake conversion、CLI 和 model-smoke 测试。该阶段提交未改生产 ingestion/DB/index activation，且当时按阶段边界拒绝 MinerU（后由 V2-4 接入）。本机未执行真实 Docling 模型 smoke 和六论文 A/B，因此状态是“实现完成/环境验收待跑”，不得记为 V2-3 全验收完成。跨机器命令和硬门见 `docs/pdf-ingestion-v2-handoff.md`。
 - V2-4（MinerU Challenger）编码交付已完成：隔离 subprocess adapter 使用固定 argv、storage path 边界、单 job 输出、timeout/退出码稳定错误；content-list JSON/HTML/Markdown table 转 Canonical IR 并校验；router 与 A/B CLI 支持显式 MinerU；comparison 明确输出 improved/equivalent/regressed/pending；deterministic fake 与显式 isolated model smoke 已编写。按用户 2026-08-26 指令未安装环境，真实 MinerU 和六论文 A/B 均为 pending，不能宣称 V2-3/V2-4 环境验收通过。
 - V2-5（Table-aware Chunking）编码交付已完成：新增 parser-agnostic `chunk_document_ir` 与 table parent/row/group chunker；row/group retrieval 显式绑定 multi-level column header、row header 和 value；metadata 保存 element/cell/page/bbox/fingerprint/parent index；table parent 明确不入索引；RealChunker 预分配 UUID 后解析 parent/chapter index，悬空引用稳定失败。公开 synthetic contracts 覆盖 9 个 table hard-case 结构和 `13.61/13.09 min` 段落关系；私有 10-case gate 未运行，保持 pending。
+- V2-6（Migration 与生产激活）编码交付已完成：`0002_pdf_ingestion_v2` 与 ORM 增加 parser/IR nullable fields、index、CHECK；IR artifact manager 实现 canonical write/hash/verify/building→versions atomic rename/failure quarantine/delete/orphan recovery；PDF worker 接入 router→IR→IR chunker，非 PDF 路径不变；snapshot 目录完整 preflight 后原子移动，DB 在同一 transaction 切换 version/document/snapshot，失败恢复旧指针并标记新 build failed；worker startup reconciliation 覆盖 stale jobs/builds。PostgreSQL migration round-trip、FAISS integration 和真实 worker E2E 未运行，保持 pending。
 
 - Phase 0 已完成：仓库、Python/uv 工程、前端工程、Docker Compose、配置加载、结构化日志、request id、health/live 与 health/ready、Ruff/mypy/pytest、前端 lint/typecheck/test/build、CI 工作流。
 - Phase 1 已完成：全部 ORM 模型、共享 enums、时间戳 mixin、Alembic async 配置与初始迁移 `0001_initial`。
@@ -244,6 +245,7 @@ max_upload_bytes: 104857600
 | 2026-08-25 | V2-3 最窄测试 | Docling adapter/router/setup CLI/A-B CLI/model-smoke collection | **49 个用例：48 通过、1 model smoke 按显式环境门跳过**；另修复 Windows GBK 下 V2-2 Unicode fixture 子进程输出，全量单测 539 通过 |
 | 2026-08-26 | V2-4 编码静态验证 | `python -m compileall -q app ...`、`git diff --check` | Python 编译与 diff whitespace 检查通过；`python -m pytest ...` 因用户要求不安装环境且系统缺少 FastAPI，collection 失败，全部 pytest/真实 MinerU/私有 A/B 明确 pending |
 | 2026-08-26 | V2-5 编码静态验证 | `python -m compileall -q app tests`、`git diff --check` | 通过；pytest 因未安装环境 pending；10 个 hard-case tests 为公开 synthetic contract proxies，不冒充私有语料实测 |
+| 2026-08-26 | V2-6 编码静态验证 | `python -m compileall -q app tests migrations`、`git diff --check` | 通过；迁移/ORM/artifact/atomic activation/rollback/recovery tests 已编码但因按用户指令不安装环境而未执行，全部运行门 pending |
 
 ## 9. 未决事项
 

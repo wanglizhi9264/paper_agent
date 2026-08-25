@@ -6,7 +6,7 @@ Local-first, single-user paper RAG assistant targeting an NVIDIA RTX 2060 (6 GB)
 
 Production wiring complete. The full pipeline runs end-to-end: upload → parse → chunk → embed → index (FAISS + BM25) → search (Dense + BM25 + RRF + rerank) → context pack → LLM → citation. See [`memory.md`](memory.md) for detailed progress and [`docs/dod-checklist.md`](docs/dod-checklist.md) for the Definition of Done checklist.
 
-PDF Ingestion V2 is a staged architecture upgrade. V2-0 through V2-2 are accepted; V2-3 Docling code and deterministic tests are complete, while the target-machine real-model smoke and private-paper A/B gate remain pending. See [`docs/pdf-ingestion-v2-spec.md`](docs/pdf-ingestion-v2-spec.md) and [`docs/pdf-ingestion-v2-handoff.md`](docs/pdf-ingestion-v2-handoff.md). V2-4 and later are not implemented yet.
+PDF Ingestion V2 is a staged architecture upgrade. V2-0 through V2-2 are accepted; V2-3 through V2-6 have complete code contracts, adapters, deterministic tests, migration, and production activation wiring. Per the 2026-08-26 coding-only run, real Docling/MinerU smoke, private-paper A/B, PostgreSQL/FAISS integration, and private benchmark gates remain explicitly pending. See [`docs/pdf-ingestion-v2-spec.md`](docs/pdf-ingestion-v2-spec.md) and [`docs/pdf-ingestion-v2-handoff.md`](docs/pdf-ingestion-v2-handoff.md).
 
 ## Prerequisites
 

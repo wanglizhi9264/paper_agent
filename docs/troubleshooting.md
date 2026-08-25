@@ -180,7 +180,18 @@ The system continues to work without reranking, just with lower relevance qualit
 1. **Scanned PDF (no text layer)** — OCR is not supported in the MVP. The PDF must have a text layer (born-digital PDFs).
 2. **Corrupted PDF** — Verify the file opens in a PDF reader.
 3. **Empty content** — The PDF has no extractable text (e.g., image-only pages).
-4. **PyMuPDF crash** — Some PDFs trigger segfaults in certain PyMuPDF versions. Try updating: `uv sync --extra ml`.
+4. **Docling unavailable after fast-path rejection** — install the pinned layout extra with
+   `uv sync --extra pdf-layout`, run `python -m app.cli.docling_setup`, and pin the emitted model SHA values.
+5. **IR validation failure** — inspect the job's stable error code and the quarantined artifacts under
+   `storage/tmp/failed/<job_id>`; do not edit the canonical JSON and activate it manually.
+
+### PDF V2 migration or recovery fails
+
+Run `uv run alembic current` and confirm the head is `0002_pdf_ingestion_v2`. The migration only adds
+nullable V2 columns, so legacy versions remain readable. Worker startup marks stale `building`
+DocumentVersion/IndexSnapshot rows failed and quarantines orphan IR directories. If a reindex fails,
+verify `documents.active_document_version_id` and `system_state.active_index_snapshot_id` still reference
+the prior ready/active records before retrying the failed job.
 
 ### DOCX or Markdown parsing fails
 

@@ -61,7 +61,7 @@ retrieval_logs (audit trail, FK → sessions)
 | Entity | UUID | Role |
 | --- | --- | --- |
 | `Document` | UUIDv4 | User-facing paper record; tracks status, SHA-256, page/chunk counts |
-| `DocumentVersion` | UUIDv4 | Immutable per-parse version; holds parser version, embedding signature, chunks |
+| `DocumentVersion` | UUIDv4 | Immutable per-parse version; V2 rows also hold parser signature, IR schema/path/hash/quality, embedding signature, chunks |
 | `Chunk` | UUIDv4 | Retrieval unit: raw_content (citation), retrieval_content (embedding/BM25), section_path, page/line range, faiss_id |
 | `IngestionJob` | UUIDv4 | Async job: kind (ingest/reindex/delete_cleanup), status, stage, progress, attempt |
 | `IndexSnapshot` | UUIDv4 | Immutable FAISS + BM25 + manifest bundle; status (building/active/superseded/failed) |
@@ -100,8 +100,8 @@ Stages set both `IngestionJob.stage` and `IngestionJob.progress`:
 | Stage | Progress | Action |
 | --- | --- | --- |
 | `queued` | 5 | Job enqueued to ARQ |
-| `parsing` | 20 | Loader reads PDF/DOCX/MD → `ParsedDocument` |
-| `chunking` | 45 | Sentence split, heading tree, chunking pipeline → `Chunk` rows |
+| `parsing` | 20 | PDF router → validated Canonical IR v2 + staged artifacts; DOCX/MD → `ParsedDocument` |
+| `chunking` | 45 | IR-aware table/text chunking or legacy non-PDF chunking → `Chunk` rows |
 | `embedding` | 70 | Embed all chunks; stamp `DocumentVersion.embedding_signature` |
 | `indexing` | 90 | Build FAISS + BM25 snapshot via `IndexManager` |
 | `finalizing` | 99 | Switch `document.active_document_version_id`; mark version READY |
@@ -116,6 +116,9 @@ Each ingestion job acquires a PostgreSQL transaction-level advisory lock keyed o
 - On `PipelineError`: job → FAILED with error code; document reverts to READY if it had a prior version, or FAILED otherwise.
 - On unexpected exception: job → FAILED with `INTERNAL_ERROR`.
 - Reindex failure preserves the prior `DocumentVersion` and active `IndexSnapshot`; the document remains searchable.
+- PDF IR is staged below `storage/ir/building/<version>` and atomically moved to
+  `storage/ir/versions/<version>` before the database pointers switch. Stale builds and orphan artifacts
+  are failed/quarantined at worker startup.
 - Delete failure leaves the document in `DELETING` status for retry.
 
 ### 4.4 Idempotency
@@ -135,7 +138,9 @@ The system builds **corpus-wide** snapshots, not per-document indices. Each new 
 5. Builds a new `FaissIndex` (`IndexIDMap2(IndexFlatIP)`) and `BM25Index`.
 6. Writes FAISS, BM25, and manifest to a `building/` directory.
 7. Validates the manifest (SHA-256, dimension, document-version map).
-8. Atomically activates: marks the new snapshot ACTIVE, supersedes the old one, updates `SystemState.active_index_snapshot_id`.
+8. Atomically renames the complete directory to `indexes/versions/<snapshot_id>`.
+9. In one database transaction marks the new snapshot ACTIVE, supersedes the old one, updates
+   `SystemState.active_index_snapshot_id`, marks the new DocumentVersion READY, and switches the document pointer.
 
 ### 5.2 Manifest
 
@@ -156,7 +161,10 @@ building/<snapshot_id>/
   └── manifest.json
 ```
 
-Files are written to a temporary `building/` directory. After validation, the `IndexSnapshot` row is committed (ACTIVE status), and `SystemState` is updated. The old snapshot is marked SUPERSEDED. File paths in the snapshot row are absolute and never overwritten.
+Files are written to a temporary `building/` directory. Missing files fail preflight without moving the
+shadow. The whole validated directory is renamed into a unique immutable `versions/` path, then the
+database activation transaction switches all pointers. A failed transaction restores the previous
+version/snapshot status and marks the new records failed; file paths are never overwritten.
 
 ## 6. Search Pipeline
 

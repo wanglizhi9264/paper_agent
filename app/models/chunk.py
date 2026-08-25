@@ -50,6 +50,12 @@ class DocumentVersion(Base, TimestampMixin):
         String(24), nullable=False, default=DocumentVersionStatus.BUILDING
     )
     parser_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    parser_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    parser_signature: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ir_schema_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    ir_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ir_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    parse_quality: Mapped[dict[str, Any] | None] = mapped_column(jsonb(), nullable=True)
     chunk_config: Mapped[dict[str, Any]] = mapped_column(jsonb(), nullable=False)
     embedding_model_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     embedding_revision: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -77,9 +83,14 @@ class DocumentVersion(Base, TimestampMixin):
             "(embedding_dimension IS NULL OR embedding_dimension > 0)",
             name="ck_docversion_dim_positive",
         ),
+        CheckConstraint(
+            "(ir_schema_version IS NULL OR ir_schema_version > 0)",
+            name="ck_docversion_ir_schema_positive",
+        ),
         Index("ix_docversion_document_id", "document_id"),
         Index("ix_docversion_status", "status"),
         Index("ix_docversion_signature", "embedding_signature"),
+        Index("ix_docversion_parser_signature", "parser_signature"),
     )
 
 

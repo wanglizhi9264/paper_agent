@@ -10,6 +10,7 @@ from app.index.faiss_index import FaissIndex
 from app.index.snapshot import (
     ManifestValidationError,
     SnapshotManifest,
+    atomic_activate_snapshot,
     build_manifest,
     load_manifest,
     save_manifest,
@@ -254,3 +255,40 @@ def test_validate_manifest_db_versions_match(tmp_path) -> None:
         faiss_path=faiss_path,
         db_document_versions={"d1": "v1", "d2": "v2"},
     )
+
+
+def test_atomic_snapshot_activation_moves_complete_directory(tmp_path: Path) -> None:
+    building = tmp_path / "building" / "snapshot"
+    building.mkdir(parents=True)
+    for name in ("index.faiss", "bm25.json", "manifest.json"):
+        (building / name).write_text(name, encoding="utf-8")
+    active = tmp_path / "versions" / "snapshot"
+    result = atomic_activate_snapshot(
+        building_dir=building,
+        active_dir=active,
+        faiss_filename="index.faiss",
+        bm25_filename="bm25.json",
+        manifest_filename="manifest.json",
+    )
+    assert result == active
+    assert not building.exists()
+    assert {path.name for path in active.iterdir()} == {
+        "index.faiss",
+        "bm25.json",
+        "manifest.json",
+    }
+
+
+def test_atomic_snapshot_activation_preflight_keeps_shadow_on_failure(tmp_path: Path) -> None:
+    building = tmp_path / "building" / "snapshot"
+    building.mkdir(parents=True)
+    (building / "index.faiss").write_text("index", encoding="utf-8")
+    with pytest.raises(ManifestValidationError, match="missing required files"):
+        atomic_activate_snapshot(
+            building_dir=building,
+            active_dir=tmp_path / "versions" / "snapshot",
+            faiss_filename="index.faiss",
+            bm25_filename="bm25.json",
+            manifest_filename="manifest.json",
+        )
+    assert (building / "index.faiss").is_file()
