@@ -1,9 +1,9 @@
 """PDF parser router (spec §7.4).
 
 ``auto`` runs the PyMuPDF fast path and accepts the candidate when every
-§7.1 quality condition holds; otherwise it routes to the layout parser
-(Docling, available from V2-3). MinerU is a challenger only and is never in
-the auto chain (spec §7.4).
+§7.1 quality condition holds; otherwise it routes to the configured layout
+parser (Docling, V2-3). MinerU is a challenger only and is never in the auto
+chain (spec §7.4).
 """
 
 from __future__ import annotations
@@ -43,8 +43,12 @@ class _AutoParser:
 
         settings = self._settings or get_settings()
         layout = getattr(settings, "pdf_layout_parser", "docling")
+        if layout == "docling":
+            from app.loaders.docling_adapter import DoclingParser
+
+            return DoclingParser.from_settings(settings)
         raise ParseError(
-            f"fast path rejected the candidate and layout parser '{layout}' is not available yet",
+            f"unknown layout parser '{layout}'",
             code=PDF_PARSER_UNAVAILABLE,
         )
 
@@ -61,10 +65,9 @@ def get_pdf_parser(settings: Any | None = None) -> DocumentParser:
     if name == "auto":
         return _AutoParser(settings)
     if name == "docling":
-        raise ParseError(
-            "Docling adapter is not implemented until V2-3",
-            code=PDF_PARSER_UNAVAILABLE,
-        )
+        from app.loaders.docling_adapter import DoclingParser
+
+        return DoclingParser.from_settings(settings)
     if name == "mineru":
         enabled = bool(getattr(settings, "mineru_enabled", False))
         if not enabled:

@@ -36,6 +36,11 @@ ml = [
     "transformers>=4.46,<5",
     "numpy>=1.26,<3",
 ]
+pdf-layout = [
+    # Docling layout parser (PDF Ingestion V2-3, spec §15.1).
+    # Pinned after a verified Windows/Python 3.12 CPU smoke; see memory.md.
+    "docling==2.121.0",
+]
 
 [dependency-groups]
 dev = [
@@ -102,6 +107,10 @@ exclude = ["migrations/", "frontend/", "storage/", "eval/"]
 
 [[tool.mypy.overrides]]
 module = ["arq.*", "faiss.*", "sentence_transformers.*", "jieba.*", "pymupdf.*", "docx.*", "docx.oxml.*", "docx.table.*", "docx.text.*", "markdown_it.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["docling.*", "docling_core.*", "huggingface_hub.*"]
 ignore_missing_imports = true
 
 # --- Pytest ---

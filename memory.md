@@ -17,6 +17,7 @@
 - PDF Ingestion V2 规格已批准；V2-0（Baseline 与 fixtures）已完成：8 个合成 PDF fixtures + golden assertions + 基线诊断命令 + 11 hard cases baseline runner。私有 6 篇论文和 benchmark 不在本机，hard cases 报告记录 `PRIVATE_DATA_UNAVAILABLE`，已知 41/52 evidence resolution 结果已复现/解释。生产 ingestion、数据库 schema、API 和索引激活逻辑未修改。
  - V2-1（Document IR）已完成：`app/document_ir/` 包含 models（Pydantic v2、extra=forbid、UUIDv4、Literal[2] schema version）、normalize（unicode-v2 normalizer：NFKC、soft hyphen、ligatures、行末 letter-dehyphenation、数字区间保连字符、dash 统一 ASCII、U+FFFD 计数不删除、希腊字母 aliases）、validate（§5.3 全部 12 条不变量：页序/reading order/引用/provenance/bbox 容差 0.5pt/parent 环/table cell 越界与重叠/markdown 确定性再生比对/NUL/hard_failures 激活门/revision 非 unknown/signature 重算校验）、serialize（canonical JSON sort_keys+compact、全量 SHA-256、§6.2 parser signature）、markdown（确定性表格渲染、合并 header 展开、数据 cell 仅原点、空 header 用 column_N 占位+warning、table fingerprint）、protocol（DocumentParser + ParseCandidate）、errors（9 个稳定错误码）。123 个单元测试覆盖 §18.1 IR 相关全部要求；依赖方向 AST 测试保证 document_ir 零 forbidden imports。
 - V2-2（PyMuPDF V2 Adapter）已完成：`app/loaders/pymupdf_adapter.py` 提供 `PyMuPDFParser`（DocumentParser protocol 实现）——提取原语 `_extract_pages_payload`（get_text("dict") block/line/span + find_tables rows[].cells 几何）与纯构建器 `build_document_ir` 分离，后者无 pymupdf 依赖可进程内单测。能力：双栏检测（中线穿越率 ≤0.15 且两侧各 ≥2 blocks）、block 级重复 header/footer 检测（≥max(2,60% 页) 次，转为 header/footer kind 元素并记录 ratio）、§8.3 段落重建（同栏/垂直间距 ≤1.8×行高/字号差 ≤20%/前非 heading/caption/后非 list）、标题层级（每字号一级：同级替换、小号嵌套于最近大号）、caption/list/formula 分类、表格 TableData（header_rows=首个 numeric 行之前、cell bbox provenance、几何不可验证时 PDF_TABLE_INVALID warning 不伪造 cell）、§9.1 orphan numeric（数值 cell 需列 header+行 label 否则 orphan，超 0.05 进 hard_failures）、quality report（replacement chars 超限进 hard_failures；双栏 confidence=0.98−crossing、单栏恒 1.0）、`fast_path_acceptable`（§7.1 六条件全与）、OCR 门（空页率 >0.8 且 <200 chars → OCR_REQUIRED）。`bridge_to_legacy_paragraphs` 仅作对比。`app/loaders/pdf_router.py` 实现 §7.4 auto/pymupdf/docling/mineru 路由（docling/mineru 返回 PDF_PARSER_UNAVAILABLE 直至 V2-3/V2-4）。Settings 新增 7 个 PAPER_RAG_PDF_* 字段+枚举校验+.env.example（生产 pipeline 未消费，行为不变）。完成门实测：普通文本 fixture legacy 内容全保留于 bridge 且 heading 正确分类；simple_table fixture 恰好 1 个有效 table（3×3、header_rows=[0]、Model|IS|FID 绑定、cell bbox 存在、IR 通过 validator、fast-path 接受）。
+- V2-3（Docling Adapter）的代码与确定性测试已完成：精确固定 `docling==2.121.0`（MIT），`uv.lock` 相对 V2-2 为 +924/-43 行；实现 Docling JSON → Canonical Document IR、bbox/reading order/section path/table cell provenance、Docling router、显式 model setup/revision pin CLI、PyMuPDF/Docling A/B CLI、fake conversion、CLI 和 model-smoke 测试。生产 ingestion/DB/index activation 未改，MinerU 仍明确拒绝且 V2-4 未实施。本机未执行真实 Docling 模型 smoke 和六论文 A/B，因此状态是“实现完成/环境验收待跑”，不得记为 V2-3 全验收完成。跨机器命令和硬门见 `docs/pdf-ingestion-v2-handoff.md`。
 
 - Phase 0 已完成：仓库、Python/uv 工程、前端工程、Docker Compose、配置加载、结构化日志、request id、health/live 与 health/ready、Ruff/mypy/pytest、前端 lint/typecheck/test/build、CI 工作流。
 - Phase 1 已完成：全部 ORM 模型、共享 enums、时间戳 mixin、Alembic async 配置与初始迁移 `0001_initial`。
@@ -191,9 +192,14 @@ max_upload_bytes: 104857600
 | 2026-08-25 | 生产 ingestion 使用 Loader registry + Chunker，并为全部 compatible active versions 重建全局 snapshot | 修复真实论文 0 chunks 和“新文档覆盖旧索引”问题 | `app/services/ingestion.py`、`app/index/manager.py`、`app/workers/tasks.py` |
 | 2026-08-25 | PDF 同页连续文本块先合并再按句切分，句子拼接显式补空格；默认每块最多合并 12 句 | PyMuPDF 常按行/块输出；逐段切分导致极小 chunk、词粘连和 evidence 跨界 | `app/chunking/pipeline.py`、`app/chunking/models.py`、`docs/spec.md` |
 | 2026-08-25 | Search/Session/Chat/SSE 挂载真实 API，检索采用 Dense+BM25+RRF+rerank（rerank 失败可降级） | 完成前后端可用闭环并保留稳定降级语义 | `app/api/`、`app/services/retrieval.py`、`app/main.py` |
+| 2026-08-25 | 真实模型构造显式传递固定 revision 与 FP16 dtype | 避免配置存在但运行时被忽略，保证 RTX 2060 使用已冻结权重和预期显存档 | `app/embedding/e5.py`、`app/rerank/base.py` |
+| 2026-08-25 | Generator 显式连接 OpenCode Go OpenAI-compatible endpoint | 用户提供独立 token；应用只读取本地 `.env`，不读取 OpenCode credential store | 本地 `.env`（ignored） |
+| 2026-08-25 | 批准 PDF Ingestion V2：自有 Document IR、Docling 默认 layout candidate、PyMuPDF fast path、MinerU 隔离 challenger | 11 个 hard cases 中 10 个是 ingestion structure 问题，继续增加 regex 无法稳定恢复表格 header/value/provenance | `docs/pdf-ingestion-v2-spec.md`、`docs/spec.md`、`docs/proposal.md` |
 | 2026-08-25 | 完成文档开发任务：更新 README、创建 architecture/retrieval-design/troubleshooting/dod-checklist | spec §22 Phase 12 交付要求 | `README.md`、`docs/architecture.md`、`docs/retrieval-design.md`、`docs/troubleshooting.md`、`docs/dod-checklist.md` |
 | 2026-08-25 | V2-0 完成：合成 fixtures + golden + 基线诊断 + hard cases runner | `docs/pdf-ingestion-v2-spec.md` §19 V2-0 | `eval/pdf_baseline.py`、`eval/hard_cases.py`、`tests/fixtures/pdf_v2/`、`tests/unit/pdf_v2/` |
 | 2026-08-25 | orphan numeric 检测用 whole-word matching 而非 substring | "is" 作为子串匹配到 "surprising" 导致假阴性 | `eval/pdf_baseline.py:_find_orphan_numerics` |
+| 2026-08-25 | V2-3 使用精确固定的 Docling optional extra，模型下载只允许显式 setup | 普通测试/worker 不得隐式联网；parser signature 必须包含真实 model revision | `pyproject.toml`、`uv.lock`、`app/cli/docling_setup.py`、`app/loaders/docling_adapter.py` |
+| 2026-08-25 | V2-3 只完成 Docling candidate 和 A/B，不接入生产激活，不实施 MinerU | 遵守 V2-3/V2-4/V2-6 阶段边界，保留对比和失败恢复契约 | `app/loaders/pdf_router.py`、`app/cli/pdf_ab.py`、`docs/pdf-ingestion-v2-handoff.md` |
 | 2026-08-25 | 表格检测 subprocess 剥离非 JSON stdout 行 | PyMuPDF find_tables 输出 "Consider using pymupdf_layout" 提示行 | `eval/pdf_baseline.py:_detect_tables_subprocess` |
 | 2026-08-25 | 合成 PDF 使用 PyMuPDF insert_text 默认 Helvetica 字体 | 不支持希腊字母；V2 真实论文解析中 PDF 自带字体不受此限制 | `tests/fixtures/pdf_v2/generators.py` |
 | 2026-08-25 | V2-0 基线诊断的 16 位 signature 保留，不迁移到 V2 §6.2 的 64 位 signature | V2-0 报告可重复性优先；V2-2 实现 PyMuPDF adapter 时统一替换 | `eval/pdf_baseline.py`（暂不动） |
@@ -225,11 +231,15 @@ max_upload_bytes: 104857600
 | 2026-08-25 | 恢复实现质量门 | `ruff check .`、`ruff format --check .`、`mypy app`、`pytest -q`；迁移测试 `--run-integration`；前端 lint/typecheck/test/build | 后端 247 单测通过、3 个 PostgreSQL 迁移集成测试通过；mypy 81 文件通过；前端 6 测试和生产 build 通过 |
 | 2026-08-25 | 六论文本机 E2E | 真实 reindex、`POST /api/v1/search`、创建 session、`POST /api/v1/chat` | 6 篇全部 ready；全局索引可重载；search/chat 返回真实 Chunk 和结构化 citations |
 | 2026-08-25 | 私有 benchmark label freeze | validator、`resolve_chunk_labels.py` | 60 条数据契约通过；部分 evidence anchors 因 PDF 抽取字符/表格顺序无法解析，按硬门失败并停止，未生成虚假指标 |
+| 2026-08-25 | 真实模型完整链路 | CUDA model smoke、六文档 reindex、Search、Chat、SSE、health | PyTorch 2.13.0+cu130 在 RTX 2060 可用；E5 768-d FP16、BGE reranker FP16、OpenCode Go `glm-5.3` 非流式/流式均通过；Search 无 degraded reason；SSE 完成 `meta/sources/delta/done` |
+| 2026-08-25 | 最新代码与全量质量门 | `git pull --ff-only`、Ruff/format/mypy/pytest、PostgreSQL integration、前端 lint/typecheck/test/build | 快进到 `7724140`；247 单测、3 集成测试、6 前端测试及生产 build 全部通过 |
 | 2026-08-25 | 文档任务质量门 | `ruff check .`、`ruff format --check .`、`mypy app`(81)、`pytest -q`、前端 lint/typecheck/test/build | ruff/format/mypy 通过；pytest 247 通过、3 skipped；前端 6 测试 + build 通过 |
 | 2026-08-25 | V2-0 质量门 | `ruff check .`、`ruff format --check .`、`mypy app`(81)、`pytest -q`；前端 lint/typecheck/test/build | ruff/format/mypy 通过；pytest 315 通过、3 skipped；V2-0 新增 68 测试全通过；前端 6 测试 + build 通过 |
 | 2026-08-25 | V2-0 baseline 报告生成 | `uv run python -m eval.pdf_baseline --fixtures tests/fixtures/pdf_v2`；`--hard-cases` | 8 合成 fixtures 基线报告生成；11 hard cases 报告全部 `PRIVATE_DATA_UNAVAILABLE`（私有论文不在本机） |
 | 2026-08-25 | V2-1 质量门 | `ruff check .`、`ruff format --check .`、`mypy app`(89 文件)、`pytest -q`、V2-0 基线复跑 `--fixtures` | ruff/format 通过；mypy 89 文件无问题（+8 document_ir）；pytest **438 通过**、3 skipped（+123 IR 测试）；V2-0 fixtures 报告在 V2-1 后复现成功，生产代码零改动 |
 | 2026-08-25 | V2-2 质量门与完成门 | `ruff check .`、`ruff format .`、`mypy app`(91 文件)、`pytest -q`、`pytest tests/unit/loaders -v` | ruff/format/mypy 通过；pytest **503 通过**、3 skipped（+65 loader 测试）；完成门 15/15：普通文本 legacy 内容全保留、simple_table 结构正确（3×3、绑定、bbox、fast-path 接受）、multicolumn 检出双栏、cross_page 两页、unicode 零 replacement、全部元素有 bbox provenance、页码从 1 连续 |
+| 2026-08-25 | V2-3 确定性质量门 | `uv lock --check`、`ruff check .`、`ruff format --check .`、`mypy app`、`pytest -q -p no:cacheprovider --basetemp <isolated>` | lock 解析 162 packages；Ruff/format 通过；mypy 95 文件通过；pytest **539 通过、4 skipped**（3 PostgreSQL integration + 1 Docling model smoke 按门跳过） |
+| 2026-08-25 | V2-3 最窄测试 | Docling adapter/router/setup CLI/A-B CLI/model-smoke collection | **49 个用例：48 通过、1 model smoke 按显式环境门跳过**；另修复 Windows GBK 下 V2-2 Unicode fixture 子进程输出，全量单测 539 通过 |
 
 ## 9. 未决事项
 
@@ -240,6 +250,7 @@ max_upload_bytes: 104857600
 - embedding/rerank 的稳定 batch size 与真实延迟；
 - 用户选择的 Generator endpoint/model 及 context limit；
 - 50+ eval 问题所用论文集合和人工标注来源。
+- V2-3 目标机器验收：Docling 模型下载体积、固定 layout/table revision SHA、public fixture real smoke、CPU/GPU 峰值、六论文/11 hard cases A/B 报告。
 
 这些是 Phase 内可验证配置，不改变已批准系统结构。若实测迫使改变架构或 MVP 范围，先与用户确认并更新 spec/proposal。
 

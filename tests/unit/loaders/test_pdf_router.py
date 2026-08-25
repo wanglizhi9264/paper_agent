@@ -21,11 +21,25 @@ class TestGetPdfParser:
         parser = get_pdf_parser(_settings(pdf_parser="auto"))
         assert type(parser).__name__ == "_AutoParser"
 
-    def test_docling_not_available_yet(self) -> None:
+    def test_docling_selected_returns_docling_parser(self) -> None:
+        parser = get_pdf_parser(_settings(pdf_parser="docling"))
+        assert type(parser).__name__ == "DoclingParser"
+
+    def test_auto_falls_back_to_docling_layout_parser(self) -> None:
+        from app.loaders.pdf_router import _AutoParser
+
+        auto = _AutoParser(_settings(pdf_parser="auto"))
+        layout = auto._layout_parser()
+        assert type(layout).__name__ == "DoclingParser"
+
+    def test_auto_unknown_layout_parser_rejected(self) -> None:
+        from app.document_ir.errors import PDF_PARSER_UNAVAILABLE
+        from app.loaders.pdf_router import _AutoParser
+
+        auto = _AutoParser(_settings(pdf_parser="auto", pdf_layout_parser="bogus"))
         with pytest.raises(ParseError) as exc_info:
-            get_pdf_parser(_settings(pdf_parser="docling"))
-        assert exc_info.value.code == "PDF_PARSER_UNAVAILABLE"
-        assert "V2-3" in str(exc_info.value)
+            auto._layout_parser()
+        assert exc_info.value.code == PDF_PARSER_UNAVAILABLE
 
     def test_mineru_disabled_rejected(self) -> None:
         with pytest.raises(ParseError):

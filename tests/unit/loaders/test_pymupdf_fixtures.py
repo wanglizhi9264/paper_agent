@@ -42,7 +42,9 @@ out = {
     "fast_path": fast_path_acceptable(ir),
     "bridge": bridge_to_legacy_paragraphs(ir),
 }
-print(json.dumps(out, ensure_ascii=False))
+# Keep subprocess stdout ASCII-safe so Windows hosts using a legacy console
+# encoding (for example GBK) can carry ligatures/superscripts deterministically.
+print(json.dumps(out, ensure_ascii=True))
 """
 
 

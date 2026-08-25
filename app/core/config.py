@@ -68,6 +68,19 @@ class Settings(BaseSettings):
     pdf_max_orphan_numeric_ratio: float = 0.05
     pdf_max_replacement_characters: int = 0
 
+    # --- Docling layout parser (spec pdf-ingestion-v2 §7.2, §14) ---
+    docling_ocr: bool = False
+    docling_table_structure: bool = True
+    docling_formula_enrichment: bool = True
+    docling_device: str = "cpu"
+    docling_layout_model: str = "docling-project/docling-layout-heron"
+    docling_table_model: str = "docling-project/TableFormer"
+    # Resolved by the explicit setup command (`python -m app.cli.docling_setup`);
+    # empty revisions keep A/B usable but must be pinned before production (§14).
+    docling_layout_revision: str = Field(default="")
+    docling_table_revision: str = Field(default="")
+    docling_artifacts_path: str = ""
+
     # --- Server ---
     host: str = "127.0.0.1"
     port: int = 8000
@@ -97,6 +110,10 @@ class Settings(BaseSettings):
             raise ValueError("PAPER_RAG_PDF_MAX_ORPHAN_NUMERIC_RATIO must be in 0..1")
         if self.pdf_max_replacement_characters < 0:
             raise ValueError("PAPER_RAG_PDF_MAX_REPLACEMENT_CHARACTERS must be >= 0")
+        if not self.docling_device:
+            raise ValueError("PAPER_RAG_DOCLING_DEVICE must not be empty")
+        if self.docling_device.lower() not in {"cpu", "cuda:0", "auto"}:
+            raise ValueError("PAPER_RAG_DOCLING_DEVICE must be one of cpu|cuda:0|auto")
         return self
 
     @property
