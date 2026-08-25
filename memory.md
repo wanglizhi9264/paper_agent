@@ -15,6 +15,7 @@
 - 本机功能验收使用显式 fake embedding/reranker/LLM，以验证无网络的完整软件闭环；这不是 RTX 2060 真实模型质量或速度验收结果。
 - 私有 benchmark 数据契约 60 条通过，但 evidence label resolver 仍发现部分 PDF 文本锚点无法与 PyMuPDF 抽取文本可靠对齐，因此没有伪造 predictions/metrics，真实质量门仍未通过。
 - PDF Ingestion V2 规格已批准；V2-0（Baseline 与 fixtures）已完成：8 个合成 PDF fixtures + golden assertions + 基线诊断命令 + 11 hard cases baseline runner。私有 6 篇论文和 benchmark 不在本机，hard cases 报告记录 `PRIVATE_DATA_UNAVAILABLE`，已知 41/52 evidence resolution 结果已复现/解释。生产 ingestion、数据库 schema、API 和索引激活逻辑未修改。
+- V2-1（Document IR）已完成：`app/document_ir/` 包含 models（Pydantic v2、extra=forbid、UUIDv4、Literal[2] schema version）、normalize（unicode-v2 normalizer：NFKC、soft hyphen、ligatures、行末 letter-dehyphenation、数字区间保连字符、dash 统一 ASCII、U+FFFD 计数不删除、希腊字母 aliases）、validate（§5.3 全部 12 条不变量：页序/reading order/引用/provenance/bbox 容差 0.5pt/parent 环/table cell 越界与重叠/markdown 确定性再生比对/NUL/hard_failures 激活门/revision 非 unknown/signature 重算校验）、serialize（canonical JSON sort_keys+compact、全量 SHA-256、§6.2 parser signature）、markdown（确定性表格渲染、合并 header 展开、数据 cell 仅原点、空 header 用 column_N 占位+warning、table fingerprint）、protocol（DocumentParser + ParseCandidate）、errors（9 个稳定错误码）。123 个单元测试覆盖 §18.1 IR 相关全部要求；依赖方向 AST 测试保证 document_ir 零 forbidden imports。
 
 - Phase 0 已完成：仓库、Python/uv 工程、前端工程、Docker Compose、配置加载、结构化日志、request id、health/live 与 health/ready、Ruff/mypy/pytest、前端 lint/typecheck/test/build、CI 工作流。
 - Phase 1 已完成：全部 ORM 模型、共享 enums、时间戳 mixin、Alembic async 配置与初始迁移 `0001_initial`。
@@ -194,6 +195,11 @@ max_upload_bytes: 104857600
 | 2026-08-25 | orphan numeric 检测用 whole-word matching 而非 substring | "is" 作为子串匹配到 "surprising" 导致假阴性 | `eval/pdf_baseline.py:_find_orphan_numerics` |
 | 2026-08-25 | 表格检测 subprocess 剥离非 JSON stdout 行 | PyMuPDF find_tables 输出 "Consider using pymupdf_layout" 提示行 | `eval/pdf_baseline.py:_detect_tables_subprocess` |
 | 2026-08-25 | 合成 PDF 使用 PyMuPDF insert_text 默认 Helvetica 字体 | 不支持希腊字母；V2 真实论文解析中 PDF 自带字体不受此限制 | `tests/fixtures/pdf_v2/generators.py` |
+| 2026-08-25 | V2-0 基线诊断的 16 位 signature 保留，不迁移到 V2 §6.2 的 64 位 signature | V2-0 报告可重复性优先；V2-2 实现 PyMuPDF adapter 时统一替换 | `eval/pdf_baseline.py`（暂不动） |
+| 2026-08-25 | IR 模型类按依赖排序定义（TableCell→TableData→DocumentElement），配合 future annotations 免 model_rebuild | spec 允许等价契约；消除前向引用复杂度 | `app/document_ir/models.py` |
+| 2026-08-25 | 表格 markdown 校验采用"重新渲染并精确比对"而非信任 parser 输入 | spec §5.3 #9：markdown 必须由 cells 确定性生成 | `app/document_ir/validate.py:_check_table_element` |
+| 2026-08-25 | 渲染器对越界/重叠 cell 容忍（跳过写入），由 validator 独立报错 | 渲染与校验职责分离；畸形表不会让诊断崩溃 | `app/document_ir/markdown.py:render_table_grid` |
+| 2026-08-25 | NFKC 已折叠 ligatures，normalize 中保留显式 ligature translate 作为幂等保险 | 步骤顺序按 spec §8.2 固定，防御未来 NFKC 行为差异 | `app/document_ir/normalize.py` |
 
 ## 8. 验证记录
 
@@ -215,6 +221,7 @@ max_upload_bytes: 104857600
 | 2026-08-25 | 文档任务质量门 | `ruff check .`、`ruff format --check .`、`mypy app`(81)、`pytest -q`、前端 lint/typecheck/test/build | ruff/format/mypy 通过；pytest 247 通过、3 skipped；前端 6 测试 + build 通过 |
 | 2026-08-25 | V2-0 质量门 | `ruff check .`、`ruff format --check .`、`mypy app`(81)、`pytest -q`；前端 lint/typecheck/test/build | ruff/format/mypy 通过；pytest 315 通过、3 skipped；V2-0 新增 68 测试全通过；前端 6 测试 + build 通过 |
 | 2026-08-25 | V2-0 baseline 报告生成 | `uv run python -m eval.pdf_baseline --fixtures tests/fixtures/pdf_v2`；`--hard-cases` | 8 合成 fixtures 基线报告生成；11 hard cases 报告全部 `PRIVATE_DATA_UNAVAILABLE`（私有论文不在本机） |
+| 2026-08-25 | V2-1 质量门 | `ruff check .`、`ruff format --check .`、`mypy app`(89 文件)、`pytest -q`、V2-0 基线复跑 `--fixtures` | ruff/format 通过；mypy 89 文件无问题（+8 document_ir）；pytest **438 通过**、3 skipped（+123 IR 测试）；V2-0 fixtures 报告在 V2-1 后复现成功，生产代码零改动 |
 
 ## 9. 未决事项
 
