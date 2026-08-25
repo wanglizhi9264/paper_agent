@@ -35,6 +35,7 @@ class E5Adapter:
     @classmethod
     def from_settings(cls, s: Settings) -> E5Adapter:
         try:
+            import torch
             from sentence_transformers import SentenceTransformer
         except ImportError as exc:
             raise EmbeddingError(
@@ -44,6 +45,10 @@ class E5Adapter:
         model = SentenceTransformer(
             s.embedding_model,
             device=s.embedding_device,
+            revision=s.embedding_revision or None,
+            model_kwargs={
+                "dtype": torch.float16 if s.embedding_dtype == "float16" else torch.float32
+            },
         )
         dim = model.get_sentence_embedding_dimension()
         if dim is None or dim <= 0:

@@ -58,9 +58,17 @@ class BGEReranker:
 
     @classmethod
     def from_settings(cls, settings: Any) -> BGEReranker:
+        import torch
         from sentence_transformers import CrossEncoder
 
-        model = CrossEncoder(settings.rerank_model, device=settings.rerank_device)
+        model = CrossEncoder(
+            settings.rerank_model,
+            device=settings.rerank_device,
+            revision=settings.rerank_revision or None,
+            automodel_args={
+                "dtype": torch.float16 if settings.rerank_dtype == "float16" else torch.float32
+            },
+        )
         return cls(
             model=model,
             batch_size=settings.rerank_batch_size,
