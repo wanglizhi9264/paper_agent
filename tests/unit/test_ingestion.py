@@ -78,6 +78,79 @@ async def test_run_ingest_idempotent_on_succeeded(async_sqlite_session) -> None:
     assert job.progress == progress_before  # no re-run
 
 
+def test_real_chunker_resolves_parent_indices_to_ids() -> None:
+    from app.chunking.models import ChunkResult
+    from app.models.chunk import DocumentVersion
+    from app.models.enums import DocumentVersionStatus
+    from app.services.ingestion import RealChunker
+
+    document, _job = _make_doc_and_job()
+    version = DocumentVersion(
+        id=uuid.uuid4(),
+        document_id=document.id,
+        status=DocumentVersionStatus.BUILDING,
+        chunk_config={},
+        chunks=[],
+    )
+    results = [
+        ChunkResult(
+            chunk_index=0,
+            kind="table",
+            section_path=[],
+            raw_content="parent",
+            retrieval_content="parent",
+            content_hash="a" * 64,
+            character_count=6,
+            metadata={"chunk_subtype": "table_parent"},
+        ),
+        ChunkResult(
+            chunk_index=1,
+            kind="table",
+            section_path=[],
+            raw_content="row",
+            retrieval_content="row",
+            content_hash="b" * 64,
+            character_count=3,
+            parent_chunk_index=0,
+            metadata={"chunk_subtype": "table_row"},
+        ),
+    ]
+    chunker = RealChunker(object())
+    chunker._build_results = lambda _parsed: results  # type: ignore[method-assign]
+    assert chunker.chunk(document, version) == 2
+    assert version.chunks[1].parent_chunk_id == version.chunks[0].id
+
+
+def test_real_chunker_rejects_missing_parent_index() -> None:
+    from app.chunking.models import ChunkResult
+    from app.models.chunk import DocumentVersion
+    from app.models.enums import DocumentVersionStatus
+    from app.services.ingestion import RealChunker
+
+    document, _job = _make_doc_and_job()
+    version = DocumentVersion(
+        id=uuid.uuid4(),
+        document_id=document.id,
+        status=DocumentVersionStatus.BUILDING,
+        chunk_config={},
+        chunks=[],
+    )
+    result = ChunkResult(
+        chunk_index=0,
+        kind="table",
+        section_path=[],
+        raw_content="row",
+        retrieval_content="row",
+        content_hash="b" * 64,
+        character_count=3,
+        parent_chunk_index=99,
+    )
+    chunker = RealChunker(object())
+    chunker._build_results = lambda _parsed: [result]  # type: ignore[method-assign]
+    with pytest.raises(PipelineError, match="parent chunk index"):
+        chunker.chunk(document, version)
+
+
 @pytest.mark.asyncio
 async def test_run_ingest_failure_marks_failed_keeps_old_version(async_sqlite_session) -> None:
     doc, job = _make_doc_and_job()

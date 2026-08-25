@@ -131,16 +131,23 @@ class RealChunker:
     def __init__(self, parsed_doc: Any) -> None:
         self._parsed = parsed_doc
 
-    def chunk(self, document: Document, version: DocumentVersion) -> int:
+    def _build_results(self, parsed: Any) -> list[Any]:
         from app.chunking.models import ChunkConfig
-        from app.chunking.pipeline import chunk_document
+        from app.chunking.pipeline import chunk_document, chunk_document_ir
+        from app.document_ir.models import DocumentIR
+
+        if isinstance(parsed, DocumentIR):
+            return chunk_document_ir(parsed, ChunkConfig.default())
+        return chunk_document(parsed, ChunkConfig.default())
+
+    def chunk(self, document: Document, version: DocumentVersion) -> int:
         from app.models.chunk import Chunk as ChunkORM
         from app.models.enums import ChunkKind
 
         parsed = getattr(self._parsed, "parsed_document", self._parsed)
         if parsed is None:
             raise PipelineError("parser did not produce a ParsedDocument", code="PARSER_ERROR")
-        results = chunk_document(parsed, ChunkConfig.default())
+        results = self._build_results(parsed)
         kind_map = {
             "text": ChunkKind.TEXT,
             "title": ChunkKind.TITLE,
@@ -148,8 +155,12 @@ class RealChunker:
             "code": ChunkKind.CODE,
             "chapter": ChunkKind.CHAPTER,
         }
+        by_index: dict[int, Any] = {}
         for r in results:
+            if r.chunk_index in by_index:
+                raise PipelineError("duplicate chunk index", code="CHUNK_PARENT_INVALID")
             orm = ChunkORM(
+                id=uuid.uuid4(),
                 document_id=document.id,
                 document_version_id=version.id,
                 chunk_index=r.chunk_index,
@@ -165,6 +176,25 @@ class RealChunker:
                 line_end=r.line_end,
                 metadata_=r.metadata or None,
             )
+            by_index[r.chunk_index] = orm
+        for r in results:
+            orm = by_index[r.chunk_index]
+            if r.parent_chunk_index is not None:
+                parent = by_index.get(r.parent_chunk_index)
+                if parent is None:
+                    raise PipelineError(
+                        f"parent chunk index {r.parent_chunk_index} was not generated",
+                        code="CHUNK_PARENT_INVALID",
+                    )
+                orm.parent_chunk_id = parent.id
+            if r.chapter_chunk_index is not None:
+                chapter = by_index.get(r.chapter_chunk_index)
+                if chapter is None:
+                    raise PipelineError(
+                        f"chapter chunk index {r.chapter_chunk_index} was not generated",
+                        code="CHUNK_PARENT_INVALID",
+                    )
+                orm.chapter_chunk_id = chapter.id
             version.chunks.append(orm)
         return len(results)
 

@@ -16,7 +16,7 @@ hashes. No DB, no I/O.
 from __future__ import annotations
 
 import hashlib
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.chunking.heading_tree import (
     HeadingNode,
@@ -26,6 +26,9 @@ from app.chunking.heading_tree import (
 from app.chunking.models import ChunkConfig, ChunkResult
 from app.chunking.sentence import Sentence, split_sentences
 from app.loaders.base import Paragraph, ParsedDocument
+
+if TYPE_CHECKING:
+    from app.document_ir.models import DocumentIR
 
 
 def chunk_document(
@@ -418,3 +421,86 @@ def _hash(text: str) -> str:
 
 def _path_key(section_path: list[str]) -> str:
     return "\x00".join(section_path)
+
+
+def chunk_document_ir(
+    document: DocumentIR, config: ChunkConfig | None = None
+) -> list[ChunkResult]:
+    """Chunk Canonical Document IR without branching on parser identity."""
+    from app.chunking.table import chunk_table_element
+    from app.document_ir.normalize import formula_search_aliases
+
+    cfg = config or ChunkConfig.default()
+    results: list[ChunkResult] = []
+    for element in sorted(document.elements, key=lambda value: value.reading_order):
+        if element.kind in {"header", "footer", "figure"}:
+            continue
+        if element.kind == "table":
+            if not cfg.table_on:
+                para = Paragraph(
+                    type="text",
+                    content=element.raw_text,
+                    page=element.provenance[0].physical_page,
+                    metadata={"element_id": str(element.id), "element_kind": "table"},
+                )
+                _add_text_chunks(
+                    results, para, element.section_path, document.title, cfg, None
+                )
+            else:
+                results.extend(
+                    chunk_table_element(
+                        element,
+                        document_title=document.title,
+                        start_index=len(results),
+                        config=cfg,
+                    )
+                )
+            continue
+
+        if element.kind in {"title", "heading"} and not cfg.title_chunk_on:
+            continue
+        page_numbers = [span.physical_page for span in element.provenance]
+        metadata: dict[str, Any] = {
+            "ir_schema_version": 2,
+            "element_id": str(element.id),
+            "element_kind": element.kind,
+            "physical_pages": sorted(set(page_numbers)),
+            "bboxes": [
+                {
+                    "physical_page": span.physical_page,
+                    "x0": span.bbox.x0,
+                    "y0": span.bbox.y0,
+                    "x1": span.bbox.x1,
+                    "y1": span.bbox.y1,
+                }
+                for span in element.provenance
+                if span.bbox is not None
+            ],
+            "cell_ids": [],
+        }
+        aliases = formula_search_aliases(element.normalized_text) if element.kind == "formula" else []
+        if aliases:
+            metadata["search_aliases"] = aliases
+        para_type = "code" if element.kind == "code" else "text"
+        before = len(results)
+        para = Paragraph(
+            type=para_type,
+            content=element.raw_text,
+            page=min(page_numbers, default=None),
+            metadata={"page_end": max(page_numbers, default=None), **metadata},
+        )
+        if para_type == "code":
+            _add_code_chunk(results, para, element.section_path, document.title, cfg, None)
+        else:
+            _add_text_chunks(results, para, element.section_path, document.title, cfg, None)
+        for chunk in results[before:]:
+            chunk.metadata.update(metadata)
+            normalized = element.normalized_text
+            if aliases:
+                normalized = f"{normalized} {' '.join(aliases)}"
+            chunk.retrieval_content = _build_retrieval_content(
+                document.title, element.section_path, normalized, cfg
+            )
+            if element.kind in {"title", "heading"}:
+                chunk.kind = "title"
+    return results

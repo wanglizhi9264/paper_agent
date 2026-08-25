@@ -15,7 +15,8 @@
 | V2-2 | 已完成 | PyMuPDF V2 adapter、fast-path quality routing、legacy bridge | 无 |
 | V2-3 | 代码完成/环境门待跑 | Docling 2.121.0 adapter、router、setup CLI、A/B CLI、fake conversion tests、model smoke | Docling 模型下载、revision 固定、真实 fixture smoke、六论文 A/B |
 | V2-4 | 编码完成/环境门待跑 | 隔离 adapter、subprocess 安全、fake tests、显式 smoke、A/B 结论字段 | 独立 MinerU 与私有 unresolved cases A/B |
-| V2-5～V2-8 | 未实施 | 见主规格第 19 节 | 按阶段完成门实施 |
+| V2-5 | 编码完成/私有门待跑 | IR-native table parent/row/group、metadata、ORM parent mapping、synthetic hard-case contracts | 私有 10 ingestion hard cases |
+| V2-6～V2-8 | 未实施 | 见主规格第 19 节 | 按阶段完成门实施 |
 
 禁止在 V2-3 真实 smoke 和 A/B 失败时宣布 V2-3 验收完成，也禁止为规避失败而直接进入 V2-4。
 
@@ -33,6 +34,17 @@
 - 显式 smoke：先把公开 fixture 复制到配置的 uploads 目录，再设置
   `PAPER_RAG_RUN_MINERU_SMOKE=1`、启用并固定隔离 MinerU 版本，运行
   `uv run pytest -m model_smoke tests/model_smoke/pdf_v2/test_mineru_isolated_smoke.py -v`。
+
+### 1.2 V2-5 编码交付
+
+- `chunk_document_ir` 是 parser-agnostic 的 Canonical IR 入口；header/footer/figure 不进入首轮检索。
+- 每张表生成一个 `table_parent`（`add_to_index=false`）、每个数据行至少一个 `table_row`；
+  多级表头、层级 row header、重复 header group 或过长 row 生成 `table_group`。
+- row/group retrieval content 使用 `header path: value`，metadata 包含 element/cell/page/bbox、
+  fingerprint、row indices 和 `parent_chunk_index`。
+- `RealChunker` 先分配全部 ORM chunk UUID，再校验并解析 parent/chapter index；缺失父项使整个构建失败。
+- 9 个表格 hard case 加 `13.61/13.09 min` 的公开 synthetic contract proxies 已编码；
+  私有 10-case 完成门未执行，保持 pending。
 
 ## 2. V2-3 实现契约
 
