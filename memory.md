@@ -188,6 +188,7 @@ max_upload_bytes: 104857600
 | 2026-08-25 | 生产 ingestion 使用 Loader registry + Chunker，并为全部 compatible active versions 重建全局 snapshot | 修复真实论文 0 chunks 和“新文档覆盖旧索引”问题 | `app/services/ingestion.py`、`app/index/manager.py`、`app/workers/tasks.py` |
 | 2026-08-25 | PDF 同页连续文本块先合并再按句切分，句子拼接显式补空格；默认每块最多合并 12 句 | PyMuPDF 常按行/块输出；逐段切分导致极小 chunk、词粘连和 evidence 跨界 | `app/chunking/pipeline.py`、`app/chunking/models.py`、`docs/spec.md` |
 | 2026-08-25 | Search/Session/Chat/SSE 挂载真实 API，检索采用 Dense+BM25+RRF+rerank（rerank 失败可降级） | 完成前后端可用闭环并保留稳定降级语义 | `app/api/`、`app/services/retrieval.py`、`app/main.py` |
+| 2026-08-25 | 完成文档开发任务：更新 README、创建 architecture/retrieval-design/troubleshooting/dod-checklist | spec §22 Phase 12 交付要求 | `README.md`、`docs/architecture.md`、`docs/retrieval-design.md`、`docs/troubleshooting.md`、`docs/dod-checklist.md` |
 
 ## 8. 验证记录
 
@@ -206,6 +207,7 @@ max_upload_bytes: 104857600
 | 2026-08-25 | 恢复实现质量门 | `ruff check .`、`ruff format --check .`、`mypy app`、`pytest -q`；迁移测试 `--run-integration`；前端 lint/typecheck/test/build | 后端 247 单测通过、3 个 PostgreSQL 迁移集成测试通过；mypy 81 文件通过；前端 6 测试和生产 build 通过 |
 | 2026-08-25 | 六论文本机 E2E | 真实 reindex、`POST /api/v1/search`、创建 session、`POST /api/v1/chat` | 6 篇全部 ready；全局索引可重载；search/chat 返回真实 Chunk 和结构化 citations |
 | 2026-08-25 | 私有 benchmark label freeze | validator、`resolve_chunk_labels.py` | 60 条数据契约通过；部分 evidence anchors 因 PDF 抽取字符/表格顺序无法解析，按硬门失败并停止，未生成虚假指标 |
+| 2026-08-25 | 文档任务质量门 | `ruff check .`、`ruff format --check .`、`mypy app`(81)、`pytest -q`、前端 lint/typecheck/test/build | ruff/format/mypy 通过；pytest 247 通过、3 skipped；前端 6 测试 + build 通过 |
 
 ## 9. 未决事项
 
