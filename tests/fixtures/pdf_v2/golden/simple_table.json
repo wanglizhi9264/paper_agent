@@ -1,0 +1,24 @@
+{
+  "fixture": "simple_table",
+  "description": "Normal table with single-row header and data rows",
+  "expected_challenges": ["table_structure", "header_binding", "row_binding"],
+  "expected_text_anchors": [
+    "9.46±0.11",
+    "3.17",
+    "8.32±0.10",
+    "4.51",
+    "DDPM",
+    "GAN"
+  ],
+  "expected_table_count": 1,
+  "expected_header_binding": {
+    "Model": ["DDPM", "GAN"],
+    "IS": ["9.46±0.11", "8.32±0.10"],
+    "FID": ["3.17", "4.51"]
+  },
+  "expected_page_count": 1,
+  "known_limitations": [
+    "PdfLoader V1 uses get_text('blocks') which flattens table to text, losing row/column structure",
+    "Table cells are not individually addressable; header-value binding cannot be verified"
+  ]
+}

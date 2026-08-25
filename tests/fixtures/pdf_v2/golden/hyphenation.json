@@ -1,0 +1,27 @@
+{
+  "fixture": "hyphenation",
+  "description": "Hyphenated line breaks that should not be blindly merged",
+  "expected_challenges": ["dehyphenation", "paragraph_reconstruction", "numeric_hyphen"],
+  "expected_text_anchors": [
+    "long-",
+    "word",
+    "trans-",
+    "former",
+    "archi-",
+    "tecture",
+    "gene-",
+    "ration",
+    "feature-",
+    "rich",
+    "13.61-",
+    "13.09"
+  ],
+  "expected_table_count": 0,
+  "expected_page_count": 1,
+  "known_limitations": [
+    "V1 normalize_text does not perform dehyphenation",
+    "Hyphenated words may remain split across blocks",
+    "Numeric ranges like 13.61-13.09 should not be merged",
+    "V1 has no paragraph reconstruction logic based on bbox/font analysis"
+  ]
+}

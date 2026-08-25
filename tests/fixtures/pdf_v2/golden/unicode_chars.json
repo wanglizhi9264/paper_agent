@@ -1,0 +1,30 @@
+{
+  "fixture": "unicode_chars",
+  "description": "Unicode characters: Greek letters, math symbols, ±, etc.",
+  "expected_challenges": ["unicode", "replacement_character", "math_symbols", "greek_letters"],
+  "expected_text_anchors": [
+    "9.46±0.11",
+    "3.17",
+    "ε",
+    "θ",
+    "Σ",
+    "13.61",
+    "13.09",
+    "0.923",
+    "α",
+    "ω",
+    "√",
+    "∇",
+    "||ε - ε_θ||²"
+  ],
+  "expected_table_count": 0,
+  "expected_page_count": 1,
+  "expected_replacement_character_count": 0,
+  "known_limitations": [
+    "PyMuPDF default Helvetica font cannot render Greek letters or math symbols; they appear as '·'",
+    "Fixture generation limitation: insert_text with default font loses ε, θ, Σ, etc.",
+    "Normalized text may alter some Unicode (e.g., minus/dash normalization)",
+    "Greek letter aliases (epsilon, theta, etc.) not generated in V1",
+    "± and ASCII characters ARE preserved correctly"
+  ]
+}

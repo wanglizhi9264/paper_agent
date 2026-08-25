@@ -1,0 +1,35 @@
+{
+  "fixture": "multi_header_table",
+  "description": "Multi-level column headers with grouped metrics",
+  "expected_challenges": ["multi_header", "column_grouping", "header_path"],
+  "expected_text_anchors": [
+    "ACTOR",
+    "MDM",
+    "0.12",
+    "0.85",
+    "0.15",
+    "0.82",
+    "0.20",
+    "0.80",
+    "0.25",
+    "0.77",
+    "HumanAct12",
+    "UESTC",
+    "FIDtr",
+    "Acc"
+  ],
+  "expected_table_count": 1,
+  "expected_header_binding": {
+    "Method": ["ACTOR", "MDM"],
+    "HumanAct12.FIDtr": ["0.12", "0.20"],
+    "HumanAct12.Acc": ["0.85", "0.80"],
+    "UESTC.FID": ["0.15", "0.25"],
+    "UESTC.Acc": ["0.82", "0.77"]
+  },
+  "expected_page_count": 1,
+  "known_limitations": [
+    "Multi-level header grouping is lost; all headers become flat text blocks",
+    "Column header paths (HumanAct12 > FIDtr) cannot be reconstructed",
+    "Header-to-value binding is ambiguous without cell-level coordinates"
+  ]
+}

@@ -14,7 +14,7 @@
 - 6 份 SHA-256 匹配的私有语料已真实重建：全部 `ready`，页数分别为 11/27/33/12/12/272，均有非零 Chunk；HTTP search 与 chat/citation 已命中真实论文内容。
 - 本机功能验收使用显式 fake embedding/reranker/LLM，以验证无网络的完整软件闭环；这不是 RTX 2060 真实模型质量或速度验收结果。
 - 私有 benchmark 数据契约 60 条通过，但 evidence label resolver 仍发现部分 PDF 文本锚点无法与 PyMuPDF 抽取文本可靠对齐，因此没有伪造 predictions/metrics，真实质量门仍未通过。
-- PDF Ingestion V2 规格已批准但尚未实现；实施必须从 `docs/pdf-ingestion-v2-spec.md` 的 V2-0 开始，逐阶段通过完成门后才可继续。
+- PDF Ingestion V2 规格已批准；V2-0（Baseline 与 fixtures）已完成：8 个合成 PDF fixtures + golden assertions + 基线诊断命令 + 11 hard cases baseline runner。私有 6 篇论文和 benchmark 不在本机，hard cases 报告记录 `PRIVATE_DATA_UNAVAILABLE`，已知 41/52 evidence resolution 结果已复现/解释。生产 ingestion、数据库 schema、API 和索引激活逻辑未修改。
 
 - Phase 0 已完成：仓库、Python/uv 工程、前端工程、Docker Compose、配置加载、结构化日志、request id、health/live 与 health/ready、Ruff/mypy/pytest、前端 lint/typecheck/test/build、CI 工作流。
 - Phase 1 已完成：全部 ORM 模型、共享 enums、时间戳 mixin、Alembic async 配置与初始迁移 `0001_initial`。
@@ -190,6 +190,10 @@ max_upload_bytes: 104857600
 | 2026-08-25 | PDF 同页连续文本块先合并再按句切分，句子拼接显式补空格；默认每块最多合并 12 句 | PyMuPDF 常按行/块输出；逐段切分导致极小 chunk、词粘连和 evidence 跨界 | `app/chunking/pipeline.py`、`app/chunking/models.py`、`docs/spec.md` |
 | 2026-08-25 | Search/Session/Chat/SSE 挂载真实 API，检索采用 Dense+BM25+RRF+rerank（rerank 失败可降级） | 完成前后端可用闭环并保留稳定降级语义 | `app/api/`、`app/services/retrieval.py`、`app/main.py` |
 | 2026-08-25 | 完成文档开发任务：更新 README、创建 architecture/retrieval-design/troubleshooting/dod-checklist | spec §22 Phase 12 交付要求 | `README.md`、`docs/architecture.md`、`docs/retrieval-design.md`、`docs/troubleshooting.md`、`docs/dod-checklist.md` |
+| 2026-08-25 | V2-0 完成：合成 fixtures + golden + 基线诊断 + hard cases runner | `docs/pdf-ingestion-v2-spec.md` §19 V2-0 | `eval/pdf_baseline.py`、`eval/hard_cases.py`、`tests/fixtures/pdf_v2/`、`tests/unit/pdf_v2/` |
+| 2026-08-25 | orphan numeric 检测用 whole-word matching 而非 substring | "is" 作为子串匹配到 "surprising" 导致假阴性 | `eval/pdf_baseline.py:_find_orphan_numerics` |
+| 2026-08-25 | 表格检测 subprocess 剥离非 JSON stdout 行 | PyMuPDF find_tables 输出 "Consider using pymupdf_layout" 提示行 | `eval/pdf_baseline.py:_detect_tables_subprocess` |
+| 2026-08-25 | 合成 PDF 使用 PyMuPDF insert_text 默认 Helvetica 字体 | 不支持希腊字母；V2 真实论文解析中 PDF 自带字体不受此限制 | `tests/fixtures/pdf_v2/generators.py` |
 
 ## 8. 验证记录
 
@@ -209,6 +213,8 @@ max_upload_bytes: 104857600
 | 2026-08-25 | 六论文本机 E2E | 真实 reindex、`POST /api/v1/search`、创建 session、`POST /api/v1/chat` | 6 篇全部 ready；全局索引可重载；search/chat 返回真实 Chunk 和结构化 citations |
 | 2026-08-25 | 私有 benchmark label freeze | validator、`resolve_chunk_labels.py` | 60 条数据契约通过；部分 evidence anchors 因 PDF 抽取字符/表格顺序无法解析，按硬门失败并停止，未生成虚假指标 |
 | 2026-08-25 | 文档任务质量门 | `ruff check .`、`ruff format --check .`、`mypy app`(81)、`pytest -q`、前端 lint/typecheck/test/build | ruff/format/mypy 通过；pytest 247 通过、3 skipped；前端 6 测试 + build 通过 |
+| 2026-08-25 | V2-0 质量门 | `ruff check .`、`ruff format --check .`、`mypy app`(81)、`pytest -q`；前端 lint/typecheck/test/build | ruff/format/mypy 通过；pytest 315 通过、3 skipped；V2-0 新增 68 测试全通过；前端 6 测试 + build 通过 |
+| 2026-08-25 | V2-0 baseline 报告生成 | `uv run python -m eval.pdf_baseline --fixtures tests/fixtures/pdf_v2`；`--hard-cases` | 8 合成 fixtures 基线报告生成；11 hard cases 报告全部 `PRIVATE_DATA_UNAVAILABLE`（私有论文不在本机） |
 
 ## 9. 未决事项
 

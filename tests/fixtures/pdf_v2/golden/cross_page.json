@@ -1,0 +1,20 @@
+{
+  "fixture": "cross_page",
+  "description": "Paragraph that starts on page 1 and continues on page 2",
+  "expected_challenges": ["cross_page_paragraph", "paragraph_reconstruction", "page_boundary"],
+  "expected_text_anchors": [
+    "Cross-Page Paragraph",
+    "This paragraph starts on page 1",
+    "continues to the next page",
+    "page boundary",
+    "Next Section",
+    "new section that starts after"
+  ],
+  "expected_table_count": 0,
+  "expected_page_count": 2,
+  "known_limitations": [
+    "V1 treats each page's blocks independently; cross-page paragraph is split",
+    "No detection that page 2's first block continues page 1's last block",
+    "Paragraph may be incorrectly split into two separate paragraphs"
+  ]
+}

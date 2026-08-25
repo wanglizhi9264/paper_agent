@@ -1,0 +1,21 @@
+{
+  "fixture": "multicolumn",
+  "description": "Two-column layout with left and right columns",
+  "expected_challenges": ["multicolumn", "reading_order", "column_detection"],
+  "expected_text_anchors": [
+    "Introduction",
+    "Related Work",
+    "transformer architectures",
+    "state-of-the-art results",
+    "GANs and diffusion models",
+    "sequence modeling"
+  ],
+  "expected_table_count": 0,
+  "expected_page_count": 1,
+  "expected_column_count": 2,
+  "known_limitations": [
+    "PdfLoader V1 sorts blocks by vertical band then x-coordinate, which may interleave columns",
+    "Text from left and right columns may be merged into wrong reading order",
+    "No explicit column detection; relies on x-coordinate proximity"
+  ]
+}

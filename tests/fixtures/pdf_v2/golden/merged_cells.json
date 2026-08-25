@@ -1,0 +1,27 @@
+{
+  "fixture": "merged_cells",
+  "description": "Table with merged cells (colspan) for grouped headers",
+  "expected_challenges": ["merged_cells", "colspan", "header_binding"],
+  "expected_text_anchors": [
+    "ImageNet-4",
+    "H+L+FiLM",
+    "T+F+KD",
+    "H",
+    "T",
+    "0.45",
+    "0.52",
+    "0.38",
+    "0.41"
+  ],
+  "expected_table_count": 1,
+  "expected_header_binding": {
+    "Model": ["H", "T"],
+    "ImageNet-4.H+L+FiLM": ["0.45", "0.38"],
+    "ImageNet-4.T+F+KD": ["0.52", "0.41"]
+  },
+  "expected_page_count": 1,
+  "known_limitations": [
+    "Merged cells are not detected; grouped header text may be split or merged arbitrarily",
+    "Column span information is lost; H+L+FiLM and T+F+KD may not bind to correct data cells"
+  ]
+}
