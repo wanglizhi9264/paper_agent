@@ -59,6 +59,15 @@ class Settings(BaseSettings):
     cuda_device: str = "cuda:0"
     gpu_max_concurrency: int = 1
 
+    # --- PDF Ingestion V2 (spec pdf-ingestion-v2 §14) ---
+    pdf_ir_schema_version: int = 2
+    pdf_parser: str = "auto"
+    pdf_layout_parser: str = "docling"
+    pdf_normalizer_version: str = "unicode-v2"
+    pdf_fast_path_min_reading_order_confidence: float = 0.95
+    pdf_max_orphan_numeric_ratio: float = 0.05
+    pdf_max_replacement_characters: int = 0
+
     # --- Server ---
     host: str = "127.0.0.1"
     port: int = 8000
@@ -76,6 +85,18 @@ class Settings(BaseSettings):
             self.llm_base_url.startswith("http://") or self.llm_base_url.startswith("https://")
         ):
             raise ValueError("PAPER_RAG_LLM_BASE_URL must be an http(s) URL")
+        if self.pdf_parser not in {"auto", "pymupdf", "docling", "mineru"}:
+            raise ValueError("PAPER_RAG_PDF_PARSER must be one of auto|pymupdf|docling|mineru")
+        if self.pdf_ir_schema_version != 2:
+            raise ValueError("PAPER_RAG_PDF_IR_SCHEMA_VERSION must be 2")
+        if self.pdf_normalizer_version != "unicode-v2":
+            raise ValueError("PAPER_RAG_PDF_NORMALIZER_VERSION must be unicode-v2")
+        if not (0.0 <= self.pdf_fast_path_min_reading_order_confidence <= 1.0):
+            raise ValueError("PAPER_RAG_PDF_FAST_PATH_MIN_READING_ORDER_CONFIDENCE must be in 0..1")
+        if not (0.0 <= self.pdf_max_orphan_numeric_ratio <= 1.0):
+            raise ValueError("PAPER_RAG_PDF_MAX_ORPHAN_NUMERIC_RATIO must be in 0..1")
+        if self.pdf_max_replacement_characters < 0:
+            raise ValueError("PAPER_RAG_PDF_MAX_REPLACEMENT_CHARACTERS must be >= 0")
         return self
 
     @property

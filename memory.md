@@ -15,7 +15,8 @@
 - 本机功能验收使用显式 fake embedding/reranker/LLM，以验证无网络的完整软件闭环；这不是 RTX 2060 真实模型质量或速度验收结果。
 - 私有 benchmark 数据契约 60 条通过，但 evidence label resolver 仍发现部分 PDF 文本锚点无法与 PyMuPDF 抽取文本可靠对齐，因此没有伪造 predictions/metrics，真实质量门仍未通过。
 - PDF Ingestion V2 规格已批准；V2-0（Baseline 与 fixtures）已完成：8 个合成 PDF fixtures + golden assertions + 基线诊断命令 + 11 hard cases baseline runner。私有 6 篇论文和 benchmark 不在本机，hard cases 报告记录 `PRIVATE_DATA_UNAVAILABLE`，已知 41/52 evidence resolution 结果已复现/解释。生产 ingestion、数据库 schema、API 和索引激活逻辑未修改。
-- V2-1（Document IR）已完成：`app/document_ir/` 包含 models（Pydantic v2、extra=forbid、UUIDv4、Literal[2] schema version）、normalize（unicode-v2 normalizer：NFKC、soft hyphen、ligatures、行末 letter-dehyphenation、数字区间保连字符、dash 统一 ASCII、U+FFFD 计数不删除、希腊字母 aliases）、validate（§5.3 全部 12 条不变量：页序/reading order/引用/provenance/bbox 容差 0.5pt/parent 环/table cell 越界与重叠/markdown 确定性再生比对/NUL/hard_failures 激活门/revision 非 unknown/signature 重算校验）、serialize（canonical JSON sort_keys+compact、全量 SHA-256、§6.2 parser signature）、markdown（确定性表格渲染、合并 header 展开、数据 cell 仅原点、空 header 用 column_N 占位+warning、table fingerprint）、protocol（DocumentParser + ParseCandidate）、errors（9 个稳定错误码）。123 个单元测试覆盖 §18.1 IR 相关全部要求；依赖方向 AST 测试保证 document_ir 零 forbidden imports。
+ - V2-1（Document IR）已完成：`app/document_ir/` 包含 models（Pydantic v2、extra=forbid、UUIDv4、Literal[2] schema version）、normalize（unicode-v2 normalizer：NFKC、soft hyphen、ligatures、行末 letter-dehyphenation、数字区间保连字符、dash 统一 ASCII、U+FFFD 计数不删除、希腊字母 aliases）、validate（§5.3 全部 12 条不变量：页序/reading order/引用/provenance/bbox 容差 0.5pt/parent 环/table cell 越界与重叠/markdown 确定性再生比对/NUL/hard_failures 激活门/revision 非 unknown/signature 重算校验）、serialize（canonical JSON sort_keys+compact、全量 SHA-256、§6.2 parser signature）、markdown（确定性表格渲染、合并 header 展开、数据 cell 仅原点、空 header 用 column_N 占位+warning、table fingerprint）、protocol（DocumentParser + ParseCandidate）、errors（9 个稳定错误码）。123 个单元测试覆盖 §18.1 IR 相关全部要求；依赖方向 AST 测试保证 document_ir 零 forbidden imports。
+- V2-2（PyMuPDF V2 Adapter）已完成：`app/loaders/pymupdf_adapter.py` 提供 `PyMuPDFParser`（DocumentParser protocol 实现）——提取原语 `_extract_pages_payload`（get_text("dict") block/line/span + find_tables rows[].cells 几何）与纯构建器 `build_document_ir` 分离，后者无 pymupdf 依赖可进程内单测。能力：双栏检测（中线穿越率 ≤0.15 且两侧各 ≥2 blocks）、block 级重复 header/footer 检测（≥max(2,60% 页) 次，转为 header/footer kind 元素并记录 ratio）、§8.3 段落重建（同栏/垂直间距 ≤1.8×行高/字号差 ≤20%/前非 heading/caption/后非 list）、标题层级（每字号一级：同级替换、小号嵌套于最近大号）、caption/list/formula 分类、表格 TableData（header_rows=首个 numeric 行之前、cell bbox provenance、几何不可验证时 PDF_TABLE_INVALID warning 不伪造 cell）、§9.1 orphan numeric（数值 cell 需列 header+行 label 否则 orphan，超 0.05 进 hard_failures）、quality report（replacement chars 超限进 hard_failures；双栏 confidence=0.98−crossing、单栏恒 1.0）、`fast_path_acceptable`（§7.1 六条件全与）、OCR 门（空页率 >0.8 且 <200 chars → OCR_REQUIRED）。`bridge_to_legacy_paragraphs` 仅作对比。`app/loaders/pdf_router.py` 实现 §7.4 auto/pymupdf/docling/mineru 路由（docling/mineru 返回 PDF_PARSER_UNAVAILABLE 直至 V2-3/V2-4）。Settings 新增 7 个 PAPER_RAG_PDF_* 字段+枚举校验+.env.example（生产 pipeline 未消费，行为不变）。完成门实测：普通文本 fixture legacy 内容全保留于 bridge 且 heading 正确分类；simple_table fixture 恰好 1 个有效 table（3×3、header_rows=[0]、Model|IS|FID 绑定、cell bbox 存在、IR 通过 validator、fast-path 接受）。
 
 - Phase 0 已完成：仓库、Python/uv 工程、前端工程、Docker Compose、配置加载、结构化日志、request id、health/live 与 health/ready、Ruff/mypy/pytest、前端 lint/typecheck/test/build、CI 工作流。
 - Phase 1 已完成：全部 ORM 模型、共享 enums、时间戳 mixin、Alembic async 配置与初始迁移 `0001_initial`。
@@ -200,6 +201,12 @@ max_upload_bytes: 104857600
 | 2026-08-25 | 表格 markdown 校验采用"重新渲染并精确比对"而非信任 parser 输入 | spec §5.3 #9：markdown 必须由 cells 确定性生成 | `app/document_ir/validate.py:_check_table_element` |
 | 2026-08-25 | 渲染器对越界/重叠 cell 容忍（跳过写入），由 validator 独立报错 | 渲染与校验职责分离；畸形表不会让诊断崩溃 | `app/document_ir/markdown.py:render_table_grid` |
 | 2026-08-25 | NFKC 已折叠 ligatures，normalize 中保留显式 ligature translate 作为幂等保险 | 步骤顺序按 spec §8.2 固定，防御未来 NFKC 行为差异 | `app/document_ir/normalize.py` |
+| 2026-08-25 | body 字号用行字号 25 分位数而非中位数 | 短页上标题占比高会把中位数抬高到标题字号，抑制 heading 检测 | `pymupdf_adapter.compute_body_size` |
+| 2026-08-25 | 标题层级用"每字号一级"映射表而非单调栈 | 单调栈无法区分同级兄弟（应替换）与更小号子级（应嵌套）；map+最近更大号前缀两者兼得 | `pymupdf_adapter.build_document_ir` |
+| 2026-08-25 | 双栏 reading-order confidence = max(0, 0.98−crossing)，单栏恒 1.0 | 栏检测本身是启发式，固定 0.02 不确定度；单栏宽行穿越中线不应受罚 | `build_document_ir` |
+| 2026-08-25 | 公式判定改多符号计数（≥2 或 '='+'≥1 符号） | 原全符号正则无法匹配含 E[]、εθ 等字母的真实公式形态 | `pymupdf_adapter._looks_like_formula` |
+| 2026-08-25 | pass-3 循环变量改名 page_number | 与 pass-1 遗留 `number` 撞名导致所有 PageIR.physical_page 相同（测试捕获） | `build_document_ir` |
+| 2026-08-25 | Settings 新增 PAPER_RAG_PDF_* 但生产 worker 不消费 | V2-2 仅交付 adapter+router；生产切换在 V2-6 迁移时进行，保持行为不变 | `app/core/config.py`、`.env.example` |
 
 ## 8. 验证记录
 
@@ -222,6 +229,7 @@ max_upload_bytes: 104857600
 | 2026-08-25 | V2-0 质量门 | `ruff check .`、`ruff format --check .`、`mypy app`(81)、`pytest -q`；前端 lint/typecheck/test/build | ruff/format/mypy 通过；pytest 315 通过、3 skipped；V2-0 新增 68 测试全通过；前端 6 测试 + build 通过 |
 | 2026-08-25 | V2-0 baseline 报告生成 | `uv run python -m eval.pdf_baseline --fixtures tests/fixtures/pdf_v2`；`--hard-cases` | 8 合成 fixtures 基线报告生成；11 hard cases 报告全部 `PRIVATE_DATA_UNAVAILABLE`（私有论文不在本机） |
 | 2026-08-25 | V2-1 质量门 | `ruff check .`、`ruff format --check .`、`mypy app`(89 文件)、`pytest -q`、V2-0 基线复跑 `--fixtures` | ruff/format 通过；mypy 89 文件无问题（+8 document_ir）；pytest **438 通过**、3 skipped（+123 IR 测试）；V2-0 fixtures 报告在 V2-1 后复现成功，生产代码零改动 |
+| 2026-08-25 | V2-2 质量门与完成门 | `ruff check .`、`ruff format .`、`mypy app`(91 文件)、`pytest -q`、`pytest tests/unit/loaders -v` | ruff/format/mypy 通过；pytest **503 通过**、3 skipped（+65 loader 测试）；完成门 15/15：普通文本 legacy 内容全保留、simple_table 结构正确（3×3、绑定、bbox、fast-path 接受）、multicolumn 检出双栏、cross_page 两页、unicode 零 replacement、全部元素有 bbox provenance、页码从 1 连续 |
 
 ## 9. 未决事项
 
