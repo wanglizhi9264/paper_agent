@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator
 from typing import Annotated, Literal, cast
 
 from fastapi import APIRouter, Depends, Request
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import StreamingResponse
 
@@ -17,8 +18,9 @@ from app.llm.citations import validate_citations
 from app.llm.openai_compatible import get_llm_provider
 from app.models.enums import MessageRole, MessageStatus
 from app.models.session import Message, Session
-from app.schemas.chat import ChatRequest, ChatResponse
+from app.schemas.chat import ChatRequest, ChatResponse, SourceOut
 from app.schemas.search import SearchRequest, SearchResponse, SearchScope
+from app.services.query_rewrite import rewrite_query
 from app.services.retrieval import search_corpus
 
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
@@ -39,37 +41,67 @@ async def _prepare(
     SearchResponse,
     list[LLMMessage],
     dict[int, str],
-    list[dict[str, object]],
+    list[SourceOut],
 ]:
     item = await db.get(Session, body.session_id)
     if item is None:
         raise NotFoundError(code="SESSION_NOT_FOUND", message="Session was not found.")
+    recent = list(
+        (
+            await db.execute(
+                select(Message)
+                .where(Message.session_id == item.id)
+                .order_by(Message.created_at.desc(), Message.id.desc())
+                .limit(4)
+            )
+        ).scalars()
+    )
+    recent.reverse()
+    history = [
+        (
+            message.role if isinstance(message.role, str) else message.role.value,
+            message.content,
+        )
+        for message in recent
+    ]
+    rewrite = await rewrite_query(get_llm_provider(), history, body.query, _scope(item))
     user = Message(session_id=item.id, role=MessageRole.USER, content=body.query)
     db.add(user)
     search = await search_corpus(
         db,
-        SearchRequest(query=body.query, scope=_scope(item), top_k=8),
+        SearchRequest(query=rewrite.rewrite.retrieval_query(), scope=_scope(item), top_k=8),
         get_embedding_provider(),
+        original_query=body.query,
     )
-    sources: list[dict[str, object]] = []
+    search.degraded_reasons.extend(
+        reason for reason in rewrite.degraded_reasons if reason not in search.degraded_reasons
+    )
+    sources: list[SourceOut] = []
     blocks: list[str] = []
     citation_map: dict[int, str] = {}
     for index, result in enumerate(search.results, start=1):
         citation_map[index] = str(result.chunk_id)
-        source = {
-            "index": index,
-            "chunk_id": str(result.chunk_id),
-            "document_title": result.document_title,
-            "section_path": result.section_path,
-            "page": str(result.page_start or "unknown"),
-            "content": result.raw_content,
-            "truncated": False,
-        }
+        source = SourceOut(
+            index=index,
+            chunk_id=result.chunk_id,
+            document_id=result.document_id,
+            document_title=result.document_title,
+            section_path=result.section_path,
+            page=str(result.page_start or "unknown"),
+            page_start=result.page_start,
+            page_end=result.page_end,
+            element_id=result.element_id,
+            element_kind=result.element_kind,
+            cell_ids=result.cell_ids,
+            bboxes=result.bboxes,
+            content=result.context_content,
+            truncated=False,
+        )
         sources.append(source)
         blocks.append(
             f"[Source {index}]\nDocument: {result.document_title}\n"
             f"Section: {' > '.join(result.section_path)}\nPage: {result.page_start or 'unknown'}\n"
-            f"Chunk-ID: {result.chunk_id}\nContent:\n{result.raw_content}"
+            f"Chunk-ID: {result.chunk_id}\nContent:\n{result.context_content}"
         )
     messages = [
         LLMMessage(
@@ -132,7 +164,9 @@ async def chat_stream(
                 "rewritten_query": search.rewritten_query,
             },
         )
-        yield _event("sources", {"sources": sources})
+        yield _event(
+            "sources", {"sources": [source.model_dump(mode="json") for source in sources]}
+        )
         parts: list[str] = []
         try:
             async for chunk in get_llm_provider().stream(messages):

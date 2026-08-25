@@ -216,6 +216,9 @@ max_upload_bytes: 104857600
 | 2026-08-25 | 公式判定改多符号计数（≥2 或 '='+'≥1 符号） | 原全符号正则无法匹配含 E[]、εθ 等字母的真实公式形态 | `pymupdf_adapter._looks_like_formula` |
 | 2026-08-25 | pass-3 循环变量改名 page_number | 与 pass-1 遗留 `number` 撞名导致所有 PageIR.physical_page 相同（测试捕获） | `build_document_ir` |
 | 2026-08-25 | Settings 新增 PAPER_RAG_PDF_* 但生产 worker 不消费 | V2-2 仅交付 adapter+router；生产切换在 V2-6 迁移时进行，保持行为不变 | `app/core/config.py`、`.env.example` |
+| 2026-08-26 | V2-7 table expansion 保留命中 row/group 作为 marker，parent/最多两条 query-relevant row 只进入 context_content | 防止未评分 parent 冒充证据，同时保留 header 上下文且限制大表上下文体积 | `app/retrieval/table.py`、`app/services/retrieval.py` |
+| 2026-08-26 | Query rewrite 使用最近四条 Session 消息、Session scope 和五字段 Pydantic 输出；任意失败回退原 query 并记录 REWRITE_FAILED | 满足 eval-048 语义槽位且避免把 retrieval results 反馈进 rewrite | `app/services/query_rewrite.py`、`app/schemas/rewrite.py` |
+| 2026-08-26 | 私有 11-case gate 使用显式 evidence JSON 且 fail closed | 本机无私有论文时不能用 synthetic proxy 冒充 11/11 完成门 | `app/cli/pdf_v2_gate.py` |
 
 ## 8. 验证记录
 
@@ -246,6 +249,7 @@ max_upload_bytes: 104857600
 | 2026-08-26 | V2-4 编码静态验证 | `python -m compileall -q app ...`、`git diff --check` | Python 编译与 diff whitespace 检查通过；`python -m pytest ...` 因用户要求不安装环境且系统缺少 FastAPI，collection 失败，全部 pytest/真实 MinerU/私有 A/B 明确 pending |
 | 2026-08-26 | V2-5 编码静态验证 | `python -m compileall -q app tests`、`git diff --check` | 通过；pytest 因未安装环境 pending；10 个 hard-case tests 为公开 synthetic contract proxies，不冒充私有语料实测 |
 | 2026-08-26 | V2-6 编码静态验证 | `python -m compileall -q app tests migrations`、`git diff --check` | 通过；迁移/ORM/artifact/atomic activation/rollback/recovery tests 已编码但因按用户指令不安装环境而未执行，全部运行门 pending |
+| 2026-08-26 | V2-7 编码静态验证 | `python -m compileall -q app tests`、`git diff --check` | 通过；Ruff/pytest/mypy、11/11 私有 hard-case gate、真实 citation/rewrite E2E 因用户要求不安装环境而 pending；未生成私有 evidence 或 metrics |
 
 ## 9. 未决事项
 

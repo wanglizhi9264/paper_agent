@@ -21,14 +21,16 @@ Query string
   ├── 5. Cross-encoder Rerank (graceful degradation)
   │     BGE reranker → re-sort by rerank score
   │
-  └── 6. Top-k Selection → SearchResponse
+  ├── 6. Chunk-id/content-hash dedup
+  │
+  └── 7. Bounded table context expansion → SearchResponse
 ```
 
 ### Key Invariants
 
 1. **Scope applies to both paths before fusion.** Dense and BM25 both filter to the allowed document set before candidate collection. No global top-k then tail-filter. (RAG invariant #10)
 2. **RRF rank starts at 1.** BM25 and cosine scores are never directly added. (RAG invariant #7)
-3. **Rerank runs after fusion.** Neighbor/chapter expansion would run after rerank. (RAG invariant #8)
+3. **Rerank runs after fusion.** Table context expansion runs only after rerank. (RAG invariant #8)
 4. **`raw_content` for citation/prompt; `retrieval_content` for embedding/BM25.** Never mixed. (RAG invariant #1)
 
 ## 2. Dense Retrieval (FAISS)
@@ -168,11 +170,26 @@ results = dedup_by_chunk_id(results)   # remove exact chunk duplicates
 results = dedup_by_content_hash(results) # remove same-content chunks
 ```
 
-### 6.2 Neighbor Expansion (after rerank)
+### 6.2 Table Expansion (after rerank)
 
-For each result chunk, adjacent chunks in the same document and section are added with `source="expanded"` and `score=0.0`. The window is configurable (default 1).
+For a ranked `table_row` or `table_group`, the context packer prepends its non-indexed
+`table_parent`, keeps the ranked row/group as the source marker, and may append at most two rows
+from the same parent selected by query/header overlap and chunk distance. Expansion never assigns a
+score or marker to the parent or neighbors. Chunk ID dedup runs before content-hash dedup, and a
+large table is never copied wholesale.
 
-### 6.3 Context Packing
+`raw_content` remains the exact ranked chunk. `context_content` is the bounded expanded text sent
+to generation; `expanded_chunk_ids` makes the operation inspectable in search debug output.
+
+### 6.3 Conversational rewrite
+
+Chat rewrite sees only the current query, the most recent four messages (two turns), and immutable
+Session scope. It does not receive retrieval results. The LLM output is validated as
+`standalone_query` plus paper/dataset/method/metric hint lists. Invalid JSON, provider errors, or
+schema errors fall back to the original query and add `REWRITE_FAILED`. Dense/rerank use the
+validated rewritten query and hints; BM25 uses the union of original and rewritten terms.
+
+### 6.4 Context Packing
 
 ```python
 blocks = pack_context(
@@ -190,7 +207,7 @@ Packing rules:
 4. Assign `[Source N]` markers (1-based).
 5. Build citation map: `{index: chunk_id}`.
 
-### 6.4 Citation Validation
+### 6.5 Citation Validation
 
 ```python
 answer, citations, invalid = validate_citations(llm_response, citation_map)
@@ -201,7 +218,10 @@ answer, citations, invalid = validate_citations(llm_response, citation_map)
 3. Strip invalid markers from the answer text.
 4. Return valid citations as `[{index, chunk_id}]`.
 
-Citations must map to actual packed sources with unique chunk IDs. No fabricated or dangling references. (RAG invariant #11)
+Citations must map to actual packed sources with unique chunk IDs. A V2 table source also carries
+`document_id`, physical `page_start/page_end`, IR `element_id`, `cell_ids`, and physical-page
+bounding boxes. Missing table provenance is rejected by the response schema. No fabricated or
+dangling references. (RAG invariant #11)
 
 ## 7. Search API
 
@@ -235,6 +255,12 @@ Citations must map to actual packed sources with unique chunk IDs. No fabricated
       "pageStart": 1,
       "pageEnd": 2,
       "rawContent": "We propose ...",
+      "contextContent": "We propose ...",
+      "expandedChunkIds": ["uuid"],
+      "elementId": null,
+      "elementKind": null,
+      "cellIds": [],
+      "bboxes": [],
       "score": 0.95,
       "rank": 1
     }

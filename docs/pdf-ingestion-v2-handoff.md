@@ -209,4 +209,18 @@ V2-3 完成门通过后，下一个代理只实施 V2-4。V2-4 完成后停止�
 | V2-7 | table retrieval/expansion、citation bbox/cell、structured rewrite | 11/11 hard cases evidence resolvable |
 | V2-8 | 六论文 reindex、52 labels、60 predictions、release docs | 主规格第 2.3 节全部成立 |
 
+### 8.1 V2-7 coding handoff (2026-08-26)
+
+The coding portion is implemented: ranked table row/group hits receive bounded parent/adjacent-row
+context without moving the citation marker; search deduplicates by chunk ID then content hash;
+chat sources expose IR element/cell/physical-page bbox provenance; rewrite uses a Pydantic schema,
+the last four Session messages, Session scope, and fail-closed fallback. The deterministic
+`eval-048` semantic-slot contract and `python -m app.cli.pdf_v2_gate --evidence <private-json>`
+acceptance command are included. The gate accepts only the exact 11-case set and exits nonzero for
+missing evidence, bad bindings/pages/table bboxes, or incomplete EEG2IM slots.
+
+Per the operator's coding-only instruction, dependency installation and pytest were not run on this
+machine. V2-3 real Docling smoke, six-paper A/B, and V2-7 11/11 private evidence remain **pending**;
+therefore this section does not claim the V2-7 completion gate passed.
+
 每个阶段的字段、错误码、文件路径、数据库顺序和测试项以主规格为准；本表不替代主规格。

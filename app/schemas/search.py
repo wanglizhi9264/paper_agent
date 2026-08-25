@@ -42,6 +42,12 @@ class SearchResultOut(CamelModel):
     page_start: int | None
     page_end: int | None
     raw_content: str
+    context_content: str
+    expanded_chunk_ids: list[uuid.UUID] = Field(default_factory=list)
+    element_id: uuid.UUID | None = None
+    element_kind: str | None = None
+    cell_ids: list[uuid.UUID] = Field(default_factory=list)
+    bboxes: list[dict[str, float | int]] = Field(default_factory=list)
     score: float
     rank: int
 

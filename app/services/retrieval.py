@@ -18,6 +18,7 @@ from app.models.index_snapshot import IndexSnapshot, SystemState
 from app.rerank import get_reranker
 from app.retrieval.bm25 import BM25Index
 from app.retrieval.fusion import rrf_fuse
+from app.retrieval.table import TableContextChunk, expand_table_context
 from app.schemas.search import SearchRequest, SearchResponse, SearchResultOut
 
 
@@ -25,7 +26,10 @@ async def search_corpus(
     session: AsyncSession,
     request: SearchRequest,
     embedding_provider: EmbeddingProvider,
+    *,
+    original_query: str | None = None,
 ) -> SearchResponse:
+    original_query = original_query or request.query
     state = await session.get(SystemState, 1)
     snapshot = (
         await session.get(IndexSnapshot, state.active_index_snapshot_id)
@@ -59,7 +63,7 @@ async def search_corpus(
     allowed = set(by_faiss)
     if not allowed:
         return SearchResponse(
-            original_query=request.query,
+            original_query=original_query,
             rewritten_query=request.query,
             results=[],
             degraded_reasons=["EMPTY_SCOPE"],
@@ -77,8 +81,13 @@ async def search_corpus(
     ][:30]
 
     bm25 = BM25Index.from_dict(json.loads(Path(snapshot.bm25_path).read_text(encoding="utf-8")))
+    sparse_query = (
+        request.query
+        if original_query == request.query
+        else f"{original_query}\n{request.query}"
+    )
     sparse = bm25.search(
-        request.query,
+        sparse_query,
         top_k=30,
         scope_doc_ids=allowed,
         minimum_should_match=request.minimum_should_match,
@@ -97,9 +106,49 @@ async def search_corpus(
         ranked.sort(key=lambda item: (-item[1], item[0]))
     except Exception:
         degraded_reasons.append("RERANK_UNAVAILABLE")
+    active_version_ids = {
+        document.active_document_version_id
+        for _chunk, document in chunk_rows
+        if document.active_document_version_id is not None
+    }
+    table_chunks = list(
+        (
+            await session.execute(
+                select(Chunk).where(
+                    Chunk.document_version_id.in_(active_version_ids), Chunk.kind == "table"
+                )
+            )
+        ).scalars()
+    )
+    table_context_chunks = [_as_table_context(chunk) for chunk in table_chunks]
+    table_context_by_id = {chunk.chunk_id: chunk for chunk in table_context_chunks}
+
+    unique_ranked: list[tuple[int, float, str]] = []
+    seen_chunk_ids: set[uuid.UUID] = set()
+    seen_hashes: set[str] = set()
+    for item in ranked:
+        chunk = by_faiss[item[0]][0]
+        if chunk.id in seen_chunk_ids or chunk.content_hash in seen_hashes:
+            continue
+        seen_chunk_ids.add(chunk.id)
+        seen_hashes.add(chunk.content_hash)
+        unique_ranked.append(item)
+
     results: list[SearchResultOut] = []
-    for rank, (faiss_id, score, _source) in enumerate(ranked[: request.top_k], start=1):
+    expansions: dict[str, list[str]] = {}
+    for rank, (faiss_id, score, _source) in enumerate(
+        unique_ranked[: request.top_k], start=1
+    ):
         chunk, document = by_faiss[faiss_id]
+        context_content = chunk.raw_content
+        expanded_chunk_ids = [chunk.id]
+        table_hit = table_context_by_id.get(chunk.id)
+        if table_hit is not None:
+            expanded = expand_table_context(table_hit, table_context_chunks, request.query)
+            context_content = expanded.content
+            expanded_chunk_ids = expanded.chunk_ids
+            expansions[str(chunk.id)] = [str(chunk_id) for chunk_id in expanded.chunk_ids]
+        metadata = chunk.metadata_ or {}
         results.append(
             SearchResultOut(
                 chunk_id=chunk.id,
@@ -109,19 +158,48 @@ async def search_corpus(
                 page_start=chunk.page_start,
                 page_end=chunk.page_end,
                 raw_content=chunk.raw_content,
+                context_content=context_content,
+                expanded_chunk_ids=expanded_chunk_ids,
+                element_id=metadata.get("element_id"),
+                element_kind=metadata.get("element_kind"),
+                cell_ids=metadata.get("cell_ids") or [],
+                bboxes=metadata.get("bboxes") or [],
                 score=score,
                 rank=rank,
             )
         )
     debug = None
     if request.debug:
-        debug = {"dense": dense, "bm25": sparse, "rrf": fused}
+        debug = {
+            "dense": dense,
+            "bm25": sparse,
+            "rrf": fused,
+            "table_expansions": expansions,
+        }
     return SearchResponse(
-        original_query=request.query,
+        original_query=original_query,
         rewritten_query=request.query,
         results=results,
         degraded_reasons=degraded_reasons,
         debug=debug,
+    )
+
+
+def _as_table_context(chunk: Chunk) -> TableContextChunk:
+    metadata = chunk.metadata_ or {}
+    return TableContextChunk(
+        chunk_id=chunk.id,
+        chunk_index=chunk.chunk_index,
+        raw_content=chunk.raw_content,
+        retrieval_content=chunk.retrieval_content,
+        content_hash=chunk.content_hash,
+        parent_chunk_id=chunk.parent_chunk_id,
+        subtype=str(metadata.get("chunk_subtype") or ""),
+        column_header_paths=[
+            [str(part) for part in path]
+            for path in (metadata.get("column_header_paths") or [])
+            if isinstance(path, list)
+        ],
     )
 
 

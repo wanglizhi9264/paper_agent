@@ -16,12 +16,17 @@ Sources:
 {sources}
 """
 
-REWRITE_PROMPT = """Given the conversation history and the current question, rewrite the question into a standalone query that can be understood without context.
+REWRITE_PROMPT = """Given the conversation history, fixed session scope, and current question, rewrite the question into a standalone retrieval query.
 
 Rules:
 - Only resolve references and add context from the conversation.
 - Do NOT answer the question.
 - Do NOT add facts not present in the conversation.
+- Preserve paper, dataset, method variant, and metric names in separate hint lists.
+- Return JSON only and include every required key.
+
+Session scope:
+{scope}
 
 Conversation history:
 {history}
@@ -29,7 +34,7 @@ Conversation history:
 Current question: {question}
 
 Respond in JSON format:
-{{"standalone_query": "...", "changed": true/false}}
+{{"standalone_query":"...","paper_hints":[],"dataset_hints":[],"method_hints":[],"metric_hints":[]}}
 """
 
 
@@ -37,9 +42,11 @@ def build_system_prompt(sources: str) -> str:
     return SYSTEM_PROMPT.format(sources=sources)
 
 
-def build_rewrite_prompt(history: list[tuple[str, str]], question: str) -> str:
-    history_text = "\n".join(f"{role}: {text}" for role, text in history[-8:])
-    return REWRITE_PROMPT.format(history=history_text, question=question)
+def build_rewrite_prompt(
+    history: list[tuple[str, str]], question: str, scope: str = '{"type":"all"}'
+) -> str:
+    history_text = "\n".join(f"{role}: {text}" for role, text in history[-4:])
+    return REWRITE_PROMPT.format(history=history_text, question=question, scope=scope)
 
 
 def build_messages(

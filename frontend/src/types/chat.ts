@@ -13,9 +13,22 @@ export interface SessionListResponse {
 export interface ChatSource {
   index: number;
   chunk_id: string;
+  document_id: string;
   document_title: string;
   section_path: string[];
   page: string;
+  page_start: number | null;
+  page_end: number | null;
+  element_id: string | null;
+  element_kind: string | null;
+  cell_ids: string[];
+  bboxes: Array<{
+    physical_page: number;
+    x0: number;
+    y0: number;
+    x1: number;
+    y1: number;
+  }>;
   content: string;
   truncated: boolean;
 }
@@ -64,6 +77,12 @@ export interface SearchResultItem {
   document_id: string;
   section_path: string[];
   raw_content: string;
+  context_content: string;
+  expanded_chunk_ids: string[];
+  element_id: string | null;
+  element_kind: string | null;
+  cell_ids: string[];
+  bboxes: ChatSource["bboxes"];
   page_start: number | null;
   page_end: number | null;
 }
