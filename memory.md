@@ -219,6 +219,7 @@ max_upload_bytes: 104857600
 | 2026-08-26 | V2-7 table expansion 保留命中 row/group 作为 marker，parent/最多两条 query-relevant row 只进入 context_content | 防止未评分 parent 冒充证据，同时保留 header 上下文且限制大表上下文体积 | `app/retrieval/table.py`、`app/services/retrieval.py` |
 | 2026-08-26 | Query rewrite 使用最近四条 Session 消息、Session scope 和五字段 Pydantic 输出；任意失败回退原 query 并记录 REWRITE_FAILED | 满足 eval-048 语义槽位且避免把 retrieval results 反馈进 rewrite | `app/services/query_rewrite.py`、`app/schemas/rewrite.py` |
 | 2026-08-26 | 私有 11-case gate 使用显式 evidence JSON 且 fail closed | 本机无私有论文时不能用 synthetic proxy 冒充 11/11 完成门 | `app/cli/pdf_v2_gate.py` |
+| 2026-08-26 | V2-8 release runner 对 60/52 labels、11-case、六文档/snapshot/runtime evidence 和四项指标统一 fail closed | 区分 prerequisite failure(exit 2) 与完整 baseline 未达门(exit 1)，不允许 oracle 或缺失数据产生绿色报告 | `eval/pdf_v2_release.py` |
 
 ## 8. 验证记录
 
@@ -250,6 +251,7 @@ max_upload_bytes: 104857600
 | 2026-08-26 | V2-5 编码静态验证 | `python -m compileall -q app tests`、`git diff --check` | 通过；pytest 因未安装环境 pending；10 个 hard-case tests 为公开 synthetic contract proxies，不冒充私有语料实测 |
 | 2026-08-26 | V2-6 编码静态验证 | `python -m compileall -q app tests migrations`、`git diff --check` | 通过；迁移/ORM/artifact/atomic activation/rollback/recovery tests 已编码但因按用户指令不安装环境而未执行，全部运行门 pending |
 | 2026-08-26 | V2-7 编码静态验证 | `python -m compileall -q app tests`、`git diff --check` | 通过；Ruff/pytest/mypy、11/11 私有 hard-case gate、真实 citation/rewrite E2E 因用户要求不安装环境而 pending；未生成私有 evidence 或 metrics |
+| 2026-08-26 | V2-8 编码静态验证 | `python -m compileall -q app eval tests`、`git diff --check`、纯函数 60/52/metrics sanity | 通过；依赖型测试和所有真实环境/私有数据门 pending；60 predictions/metrics 未生成，四项指标无可报告数值 |
 
 ## 9. 未决事项
 

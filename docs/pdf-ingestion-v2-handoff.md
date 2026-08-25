@@ -223,4 +223,17 @@ Per the operator's coding-only instruction, dependency installation and pytest w
 machine. V2-3 real Docling smoke, six-paper A/B, and V2-7 11/11 private evidence remain **pending**;
 therefore this section does not claim the V2-7 completion gate passed.
 
+### 8.2 V2-8 coding handoff (2026-08-26)
+
+`python -m eval.pdf_v2_release` now validates/fingerprints the frozen labels, requires exact 60/52
+and dev/test coverage, consumes 11-case and six-document/runtime evidence, executes live search/chat
+through an explicit API adapter, and writes 60 predictions, metrics, environment manifest and a
+summary. It applies all four candidate thresholds and preserves a complete failed baseline with exit
+code 1; invalid prerequisites stop before prediction with exit code 2. A deterministic predictor
+contract and an explicit private model-smoke wrapper are included.
+
+No private input exists on this coding machine, so no predictions or metrics were generated. The
+six-paper reindex, label freeze, full quality/recovery evidence, real model/API run and release result
+remain **pending**. PDF Ingestion V2 must not be declared complete from code availability alone.
+
 每个阶段的字段、错误码、文件路径、数据库顺序和测试项以主规格为准；本表不替代主规格。

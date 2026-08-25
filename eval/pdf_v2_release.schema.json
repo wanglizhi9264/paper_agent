@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://paper-rag.local/schemas/pdf-v2-release-dataset.json",
+  "title": "Resolved PDF Ingestion V2 private evaluation dataset",
+  "type": "object",
+  "required": ["dataset"],
+  "additionalProperties": true,
+  "properties": {
+    "dataset": {
+      "type": "array",
+      "minItems": 60,
+      "maxItems": 60,
+      "items": {"$ref": "#/$defs/question"}
+    }
+  },
+  "$defs": {
+    "scope": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {"enum": ["all", "documents", "collection"]},
+        "document_ids": {"type": "array", "items": {"type": "string", "format": "uuid"}},
+        "collection_id": {"type": "string", "format": "uuid"}
+      },
+      "additionalProperties": false
+    },
+    "question": {
+      "type": "object",
+      "required": ["id", "question", "answerable", "split", "scope", "snapshot_labels"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "question": {"type": "string", "minLength": 1},
+        "answerable": {"type": "boolean"},
+        "split": {"enum": ["dev", "test"]},
+        "scope": {"$ref": "#/$defs/scope"},
+        "snapshot_labels": {
+          "type": "object",
+          "required": ["index_snapshot_id", "relevant_chunk_ids"],
+          "properties": {
+            "index_snapshot_id": {"type": "string", "minLength": 1},
+            "relevant_chunk_ids": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {"type": "string", "minLength": 1}
+            }
+          },
+          "additionalProperties": true
+        },
+        "required_citation_chunk_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

@@ -188,8 +188,10 @@ Scope filtering happens **before** fusion (invariant #10), not after.
 ChatRequest (session_id, query)
   │
   ├── Resolve session scope
+  ├── Structured rewrite (last 4 messages + scope; fail-open to original query)
   ├── Search corpus (Dense + BM25 + RRF + rerank)
-  ├── Build context (source blocks with [N] markers)
+  ├── Expand table parent/relevant rows after rerank (bounded to 2 neighbors)
+  ├── Build context (row/group [N] marker + element/cell/page/bbox provenance)
   ├── LLM generate (stream or non-stream)
   ├── Validate citations ([N] → chunk_id)
   ├── Persist user + assistant messages

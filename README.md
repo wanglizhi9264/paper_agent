@@ -133,6 +133,34 @@ PAPER_RAG_DATABASE_URL=postgresql+asyncpg://paper_rag:paper_rag_dev@127.0.0.1:54
   uv run pytest -m integration --run-integration
 ```
 
+### PDF Ingestion V2 private release gate
+
+After the six private papers are reindexed and the 52 answerable labels are resolved, run the
+fail-closed release evaluator against the live API. All input/output paths below are ignored by Git:
+
+```bash
+uv run python -m eval.pdf_v2_release \
+  --dataset eval/private_benchmark/dataset.resolved.json \
+  --hard-case-evidence eval/private_benchmark/hard-case-evidence.json \
+  --corpus-evidence eval/private_benchmark/corpus-evidence.json \
+  --output eval/results/pdf-v2-release \
+  --allow-live-api
+```
+
+The command refuses to run unless the dataset has exactly 60 unique dev/test questions, exactly
+52 answerable questions have resolved chunk labels, all 11 hard cases pass page/binding/bbox checks,
+six corpus documents and all runtime/recovery gates are green. A complete run always saves
+`predictions.json`, `metrics.json`, `manifest.json`, and `summary.md`; unmet metric thresholds produce
+exit code 1 and a FAILED report. Invalid or incomplete prerequisites produce exit code 2 before any
+predictions are generated.
+
+`corpus-evidence.json` is an operator-produced acceptance record, not an application artifact. It
+must contain six document records (`sha256_match`, `status`, positive page/chunk counts), the active
+snapshot ID and reload/stability checks, six 64-character parser signatures, pinned embedding/
+reranker/generator revisions, `v2_table_citation_bbox_rate: 1.0`, and explicit booleans for backend,
+frontend, integration, model-smoke, migration, atomic-activation, rollback, and recovery gates. The
+release runner validates every field and embeds the parser/model/snapshot manifests in its report.
+
 Real model smoke tests use the `model_smoke` marker and are never run in CI.
 
 ## Architecture

@@ -193,6 +193,18 @@ DocumentVersion/IndexSnapshot rows failed and quarantines orphan IR directories.
 verify `documents.active_document_version_id` and `system_state.active_index_snapshot_id` still reference
 the prior ready/active records before retrying the failed job.
 
+### PDF V2 release evaluator exits 2 or 1
+
+Exit code 2 is a prerequisite failure: the resolved dataset is not exactly 60 questions/52
+answerable labels, an 11-case binding/page/bbox check failed, the six-document snapshot evidence is
+incomplete, or `--allow-live-api` was omitted. Fix the named input; do not weaken the validator or
+edit frozen labels to match current retrieval output.
+
+Exit code 1 means a complete 60-question baseline was generated but at least one candidate metric
+or request-error gate failed. Keep `predictions.json`, `metrics.json`, the parser/index manifest and
+error categories under ignored `eval/results/`, then fix the pipeline and create a new run directory.
+Never overwrite a failed baseline and report it as passed.
+
 ### DOCX or Markdown parsing fails
 
 **Symptom:** Job fails at `parsing` stage.

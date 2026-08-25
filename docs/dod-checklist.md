@@ -19,7 +19,7 @@ This checklist maps to `docs/spec.md` §22 (MVP DoD), §22.1 (Production Hard Ga
 | 7 | Non-streaming and SSE chat work, citations map to unique chunks | ✅ | `POST /api/v1/chat`, `POST /api/v1/chat/stream`, `validate_citations` strips invalid markers |
 | 8 | Delete and reindex don't break active IndexSnapshot | ✅ | Reindex preserves old version/snapshot until new one activated; delete removes from scope first |
 | 9 | Frontend: upload, status, collections, chat, source expand | ✅ | DocumentsPage, CollectionsPage, ChatPage with SSE + SourceDrawer |
-| 10 | 50+ human-annotated retrieval questions + full ablation report | ❌ | `eval/dataset.json` has 3 smoke items; private 60-item benchmark has evidence label alignment issues |
+| 10 | 50+ human-annotated retrieval questions + full ablation report | ❌ | Fail-closed 60/52 release runner is coded; private resolved labels, predictions and metrics remain pending |
 | 11 | All quality gates pass, README reproducible in fresh env | ✅ | ruff, mypy (73 files), pytest (243 passed, 3 skipped), frontend lint/typecheck/test/build all green |
 | 12 | No undocumented defaults, hardcoded dimensions, or implicit services | ✅ | All config via `PAPER_RAG_` env; dimensions from `ModelManifest`; no 768/1024 hardcoded |
 
@@ -48,7 +48,7 @@ This checklist maps to `docs/spec.md` §22 (MVP DoD), §22.1 (Production Hard Ga
 | 2 | 6 specified PDFs: SHA-256 matches manifest, all `ready`, reasonable pages, `chunk_count > 0` | ✅ | All 6 rebuilt: pages 11/27/33/12/12/272, all non-zero chunks, all `ready` |
 | 3 | Active manifest: 6 doc/version mappings, FAISS+BM25 reloadable, restart-stable top-k | ✅ | Manifest validated; FAISS/BM25 load from disk; same query → same top-k after restart |
 | 4 | API: health, documents, collections, jobs, search, sessions, chat, SSE — success + failure paths | ✅ | All routes in `app/main.py`; unit tests cover success/error; integration tests for health |
-| 5 | Eval: save dev/test baseline; candidate gates Recall@10 ≥ 0.85, Citation P ≥ 0.95, Citation R ≥ 0.85, Unanswerable ≥ 0.80 | ❌ | Eval framework complete (7 ablation configs); real baseline not yet run — needs real embedding/reranker/LLM on GPU host |
+| 5 | Eval: save dev/test baseline; candidate gates Recall@10 ≥ 0.85, Citation P ≥ 0.95, Citation R ≥ 0.85, Unanswerable ≥ 0.80 | ❌ | `eval.pdf_v2_release` enforces all thresholds; real 60-question live-API baseline has not run |
 | 6 | Recovery: reindex failure → old version searchable; delete → all scopes exclude; restart → queued/running jobs recover or fail | ✅ | `consistency.py` stale job reconciliation; reindex preserves old snapshot; delete removes from collection_documents + nulls active version |
 
 ---
@@ -64,8 +64,8 @@ This checklist maps to `docs/spec.md` §22 (MVP DoD), §22.1 (Production Hard Ga
 
 ### Remaining Work
 
-1. **50+ annotated eval dataset** (§22 #10, §22.2 #5): The private 60-item benchmark has evidence label alignment issues with PDF text anchors. Need to resolve anchor extraction or use alternative labeling strategy.
-2. **Real model baseline** (§22.2 #5): Run eval with real E5 embedding, BGE reranker, and LLM on the RTX 2060 host to measure actual quality metrics against candidate thresholds.
+1. **50+ annotated eval dataset** (§22 #10, §22.2 #5): Run V2 ingestion on the six private papers and resolve all 52 answerable labels without changing frozen reference evidence.
+2. **Real model baseline** (§22.2 #5): Run `python -m eval.pdf_v2_release` with the private hard-case/corpus evidence inputs and preserve its 60 predictions and metrics.
 3. **Fresh-DB full E2E** (§22.1 #7): Run a complete upload → search → chat → reindex → delete cycle on a fresh database to verify the full lifecycle with real infrastructure.
 
 ### Known Limitations
