@@ -1,8 +1,8 @@
 # Paper RAG Assistant 开发提案
 
-> 状态：Approved  
-> 版本：1.0.0  
-> 最后更新：2026-08-24  
+> 状态：Approved（恢复实施中）
+> 版本：1.1.0
+> 最后更新：2026-08-25
 > 对应规格：[`docs/spec.md`](./spec.md)
 
 ## 1. 提案摘要
@@ -309,3 +309,19 @@ P2：多用户权限、向量数据库、agent、知识图谱、联网文献搜�
 - 多语言质量档 reranker：[bge-reranker-v2-m3](https://huggingface.co/BAAI/bge-reranker-v2-m3)
 - Ollama 兼容接口：[OpenAI compatibility](https://docs.ollama.com/api/openai-compatibility)
 - OpenCode provider 边界：[Providers](https://opencode.ai/docs/providers/)
+
+## 16. 2026-08-25 实现审计与恢复计划
+
+实际 Windows + PostgreSQL + Redis + ARQ 验证证明，历史 “Phase 0–12 complete” 结论不成立：生产 Worker 默认使用 fake parser/chunker；真实论文被标记为 `ready` 但只有 1 页、0 chunks；索引仅构建单文档 FAISS，未构建全局 FAISS/BM25 snapshot；search/session/chat routes 未挂载；private benchmark 不能生成真实 predictions。
+
+恢复实施按以下纵向切片重新验收，完成前不得恢复 “MVP complete” 状态：
+
+1. R1 Production ingestion：真实 Loader、Chunker、Embedding registry 和 storage wiring；非空文档不得 0 chunks；
+2. R2 Corpus snapshot：从全部 active DocumentVersion 重建 FAISS + BM25 + manifest，影子校验后原子激活；
+3. R3 Retrieval API：scope validation、Dense/BM25、RRF、可选 rerank、debug trace；
+4. R4 Session/Chat API：持久化消息、context/citation、OpenAI-compatible provider、SSE 生命周期；
+5. R5 Frontend contract：前端真实调用上述 API，覆盖 loading/empty/error/success；
+6. R6 Evaluation：6 文档真实 ingestion、label resolver、60 问题 predictions、metrics 与错误分类；
+7. R7 Release：全新环境 E2E、质量门、README/architecture/troubleshooting、提交推送。
+
+每个恢复切片必须包含实现、契约测试、集成验证和 memory 记录；只完成类或纯函数不算完成。

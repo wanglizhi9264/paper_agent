@@ -8,12 +8,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.responses import Response
 
+from app.api.chat import router as chat_router
 from app.api.collections import router as collections_router
 from app.api.dependencies import RequestContextMiddleware
 from app.api.documents import router as documents_router
 from app.api.errors import AppError
 from app.api.health import router as health_router
 from app.api.jobs import router as jobs_router
+from app.api.search import router as search_router
+from app.api.sessions import router as sessions_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
 from app.db.session import dispose_engine
@@ -65,6 +68,9 @@ def create_app() -> FastAPI:
     app.include_router(documents_router)
     app.include_router(collections_router)
     app.include_router(jobs_router)
+    app.include_router(search_router)
+    app.include_router(sessions_router)
+    app.include_router(chat_router)
 
     @app.exception_handler(AppError)
     async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:

@@ -10,20 +10,25 @@ SQLite session.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    from arq import Worker
-
+from arq import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.db.session import session_scope
+from app.embedding.registry import get_embedding_provider
 from app.models.document import Document
 from app.models.enums import JobKind, JobStatus
 from app.models.job import IngestionJob
-from app.services.ingestion import FileRemover, run_delete_cleanup, run_ingest
+from app.services.ingestion import (
+    FileRemover,
+    RealChunker,
+    RealDocumentParser,
+    run_delete_cleanup,
+    run_ingest,
+)
 
 logger = get_logger(__name__)
 
@@ -43,7 +48,7 @@ async def _load_job_and_document(
 
 
 async def ingestion_task(
-    ctx: Worker,  # arq passes a WorkerContext at runtime
+    ctx: dict[str, Any],
     job_id: str,
     *,
     document_id: str,
@@ -55,9 +60,22 @@ async def ingestion_task(
         job, document = await _load_job_and_document(session, job_id)
         if job.status == JobStatus.SUCCEEDED:
             return "noop"
-        kind = job.kind.value if hasattr(job.kind, "value") else str(job.kind)
+        kind = job.kind if type(job.kind) is str else job.kind.value
         if kind in (JobKind.INGEST.value, JobKind.REINDEX.value):
-            await run_ingest(session, job, document)
+            settings = get_settings()
+            parser = RealDocumentParser(
+                settings.uploads_dir / document.stored_filename,
+                document.extension,
+            )
+            await run_ingest(
+                session,
+                job,
+                document,
+                parser=parser,
+                chunker=RealChunker(parser),
+                embedding_provider=get_embedding_provider(settings),
+                indexes_dir=settings.indexes_dir,
+            )
         elif kind == JobKind.DELETE_CLEANUP.value:
             settings = get_settings()
             await run_delete_cleanup(
@@ -68,7 +86,7 @@ async def ingestion_task(
             )
         else:
             raise RuntimeError(f"unknown job kind: {kind}")
-        return job.status.value if hasattr(job.status, "value") else str(job.status)
+        return str(job.status if type(job.status) is str else job.status.value)
 
 
 def _make_file_remover(uploads_dir: Path) -> FileRemover:
@@ -82,5 +100,9 @@ def _make_file_remover(uploads_dir: Path) -> FileRemover:
     return _remove
 
 
-# ARQ function registry.
-functions = [ingestion_task]
+# ARQ function registry. The API queues a stable name per job kind while the
+# dispatcher reads the authoritative kind from PostgreSQL.
+functions = [
+    func(ingestion_task, name=f"ingestion:{kind.value}")
+    for kind in (JobKind.INGEST, JobKind.REINDEX, JobKind.DELETE_CLEANUP)
+]

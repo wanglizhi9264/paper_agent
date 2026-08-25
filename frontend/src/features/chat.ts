@@ -39,7 +39,9 @@ export function useDeleteSession() {
   return useMutation({
     mutationFn: (id: string) => {
       const url = `${import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000"}/api/v1/sessions/${id}`;
-      return fetch(url, { method: "DELETE" }).then((r) => r.json());
+      return fetch(url, { method: "DELETE" }).then((response) => {
+        if (!response.ok) throw new Error(`Request failed (${response.status})`);
+      });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sessions"] });

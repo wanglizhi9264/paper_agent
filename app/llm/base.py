@@ -58,7 +58,7 @@ class LLMProvider(Protocol):
         timeout: float | None = None,
     ) -> LLMResponse: ...
 
-    async def stream(
+    def stream(
         self,
         messages: list[LLMMessage],
         *,

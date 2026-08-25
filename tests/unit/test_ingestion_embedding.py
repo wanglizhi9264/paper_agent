@@ -27,7 +27,9 @@ from app.models.enums import (
 )
 from app.models.index_snapshot import IndexSnapshot, SystemState
 from app.models.job import IngestionJob
+from app.schemas.search import SearchRequest, SearchScope
 from app.services.ingestion import run_ingest
+from app.services.retrieval import search_corpus
 
 
 class _FakeParser:
@@ -256,3 +258,43 @@ async def test_ingest_without_embedding_skips_indexing(async_sqlite_session) -> 
 
     sys_state = await async_sqlite_session.get(SystemState, 1)
     assert sys_state is None or sys_state.active_index_snapshot_id is None
+
+
+@pytest.mark.asyncio
+async def test_second_ingest_snapshot_keeps_first_document(async_sqlite_session, tmp_path) -> None:
+    adapter = FakeEmbeddingAdapter(dimension=32)
+    first_doc, first_job = _make_doc_and_job()
+    second_doc, second_job = _make_doc_and_job()
+    second_doc.sha256 = "b" * 64
+    second_doc.stored_filename = "second.pdf"
+    async_sqlite_session.add_all([first_doc, first_job, second_doc, second_job])
+    await async_sqlite_session.flush()
+
+    for doc, job in ((first_doc, first_job), (second_doc, second_job)):
+        await run_ingest(
+            async_sqlite_session,
+            job,
+            doc,
+            parser=_FakeParser(),
+            chunker=_RealChunker(n_chunks=2, session=async_sqlite_session),
+            embedding_provider=adapter,
+            indexes_dir=tmp_path / "indexes",
+        )
+        await async_sqlite_session.commit()
+
+    state = await async_sqlite_session.get(SystemState, 1)
+    snapshot = await async_sqlite_session.get(IndexSnapshot, state.active_index_snapshot_id)
+    assert snapshot.document_count == 2
+    assert snapshot.chunk_count == 4
+
+    response = await search_corpus(
+        async_sqlite_session,
+        SearchRequest(
+            query="testing retrieval",
+            scope=SearchScope(type="documents", document_ids=[first_doc.id]),
+            top_k=2,
+        ),
+        adapter,
+    )
+    assert response.results
+    assert {result.document_id for result in response.results} == {first_doc.id}

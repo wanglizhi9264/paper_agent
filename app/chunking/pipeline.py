@@ -141,15 +141,47 @@ def _chunk_content(
         section_path = node.section_path
         title_idx = title_indices.get(_path_key(section_path))
 
-        # Separate by paragraph type for chunking.
-        # Tables and code are standalone chunks; text paragraphs are merged.
+        # Tables and code stay standalone. Consecutive text blocks from PDF
+        # extraction are merged before sentence splitting; otherwise a PDF
+        # loader that emits one line/span per Paragraph creates unusably tiny
+        # chunks and evidence phrases can be split across chunk boundaries.
+        text_run: list[Paragraph] = []
+
         for _pnode, para in group:
             if para.type == "table":
+                _flush_text_run(results, text_run, section_path, title, cfg, title_idx)
                 _add_table_chunk(results, para, section_path, title, cfg, title_idx)
             elif para.type == "code":
+                _flush_text_run(results, text_run, section_path, title, cfg, title_idx)
                 _add_code_chunk(results, para, section_path, title, cfg, title_idx)
             else:
-                _add_text_chunks(results, para, section_path, title, cfg, title_idx)
+                if text_run and para.page != text_run[-1].page:
+                    _flush_text_run(results, text_run, section_path, title, cfg, title_idx)
+                text_run.append(para)
+        _flush_text_run(results, text_run, section_path, title, cfg, title_idx)
+
+
+def _flush_text_run(
+    results: list[ChunkResult],
+    text_run: list[Paragraph],
+    section_path: list[str],
+    title: str,
+    cfg: ChunkConfig,
+    title_idx: int | None,
+) -> None:
+    if not text_run:
+        return
+    first, last = text_run[0], text_run[-1]
+    merged = Paragraph(
+        type="text",
+        content="\n".join(p.content for p in text_run if p.content.strip()),
+        page=first.page,
+        line_start=first.line_start,
+        line_end=last.line_end,
+        metadata={"page_end": last.page},
+    )
+    _add_text_chunks(results, merged, section_path, title, cfg, title_idx)
+    text_run.clear()
 
 
 def _add_text_chunks(
@@ -183,7 +215,7 @@ def _add_text_chunks(
             buf_hard = s.hard_split
         else:
             if buf:
-                buf += s.text
+                buf += " " + s.text
             else:
                 buf = s.text
             buf_count += 1
@@ -210,7 +242,7 @@ def _add_text_chunks(
                 content_hash=_hash(chunk_text),
                 character_count=len(chunk_text),
                 page_start=para.page,
-                page_end=para.page,
+                page_end=para.metadata.get("page_end", para.page),
                 line_start=para.line_start,
                 line_end=para.line_end,
                 parent_chunk_index=title_idx,

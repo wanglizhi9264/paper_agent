@@ -4,7 +4,16 @@
 
 ## 1. 当前状态
 
-更新时间：2026-08-24
+更新时间：2026-08-25
+
+> 2026-08-25 生产审计纠正：下列历史 Phase 3–12 条目仅表示独立模块或 fake-driven 测试曾存在，不代表生产端到端已接通。当前权威状态以本节顶部“恢复实施状态”和 `docs/spec.md` §22.1–22.2 为准。
+
+### 恢复实施状态
+
+- 已验证可用：Docker Compose PostgreSQL 16 / Redis 7、Alembic、真实 Loader/Chunker Worker、全语料 FAISS+BM25 snapshot、documents/collections/jobs/search/sessions/chat/SSE API、前端真实 API 闭环。
+- 6 份 SHA-256 匹配的私有语料已真实重建：全部 `ready`，页数分别为 11/27/33/12/12/272，均有非零 Chunk；HTTP search 与 chat/citation 已命中真实论文内容。
+- 本机功能验收使用显式 fake embedding/reranker/LLM，以验证无网络的完整软件闭环；这不是 RTX 2060 真实模型质量或速度验收结果。
+- 私有 benchmark 数据契约 60 条通过，但 evidence label resolver 仍发现部分 PDF 文本锚点无法与 PyMuPDF 抽取文本可靠对齐，因此没有伪造 predictions/metrics，真实质量门仍未通过。
 
 - Phase 0 已完成：仓库、Python/uv 工程、前端工程、Docker Compose、配置加载、结构化日志、request id、health/live 与 health/ready、Ruff/mypy/pytest、前端 lint/typecheck/test/build、CI 工作流。
 - Phase 1 已完成：全部 ORM 模型、共享 enums、时间戳 mixin、Alembic async 配置与初始迁移 `0001_initial`。
@@ -22,6 +31,8 @@
 - 后端质量门实测通过：`uv run ruff check .`、`uv run ruff format --check .`、`uv run mypy app`（73 文件）、`uv run pytest -q`（243 通过，3 集成测试 skipped）。
 - 前端质量门实测通过：`npm run lint`、`npm run typecheck`、`npm test -- --run`（6 通过）、`npm run build`（279KB JS / 5KB CSS）。
 - 集成测试仍需 live PostgreSQL；Docker 待用户安装。
+- 2026-08-25 本机 Docker 环境已就绪：PostgreSQL 16 与 Redis 7 compose 服务健康，Alembic 已升级至 `0001_initial`。
+- ARQ Worker 现在通过 `WorkerSettings.redis_settings` 使用 `PAPER_RAG_REDIS_URL`，不再依赖 ARQ 默认 Redis 连接参数。
 - 尚未完成：50+ 人工标注评测集（eval/dataset.json 当前为 3 条 smoke）、真实模型 smoke test（需 GPU 主机）、真实端到端集成测试（需 Docker）。
 - 已知限制：PyMuPDF 1.28.2 在 macOS arm64 pytest 进程内 segfault；PDF 测试通过 subprocess 运行；生产中 loader 运行在 ARQ worker 不受影响。
 
@@ -169,6 +180,14 @@ max_upload_bytes: 104857600
 | 2026-08-24 | faiss_id 从 max(existing)+1 分配，不从 0 开始 | reindex 时旧 chunk 仍有 faiss_id；从 0 起会违反 unique 约束；生产 PG 用 sequence | `app/services/ingestion.py` |
 | 2026-08-24 | manifest sha256 排除 created_at | 时间戳不稳定，排除后同内容→同 hash | `app/index/snapshot.py` |
 | 2026-08-24 | numpy/faiss-cpu 用清华镜像安装 | macOS 无预装 | `uv pip install --index-url https://pypi.tuna.tsinghua.edu.cn/simple numpy faiss-cpu` |
+| 2026-08-25 | Worker 显式使用应用 Redis URL，生命周期回调改为 ARQ 要求的静态签名 | ARQ 默认连接在本机运行时超时；实例方法回调会因缺少 `self` 启动失败 | `app/workers/settings.py` |
+| 2026-08-25 | 迁移元数据测试排除 `alembic_version` | 该表由 Alembic 管理，不属于 ORM metadata | `tests/integration/test_migration.py` |
+| 2026-08-25 | E5 adapter 拒绝模型返回空或非正 embedding dimension | 完整 ML 依赖的类型契约允许 `None`，manifest 必须持有已验证的正整数维度 | `app/embedding/e5.py` |
+| 2026-08-25 | Worker 为三种 ingestion job kind 注册稳定 ARQ 名称 | API 入队使用 `ingestion:{kind}`，原 Worker 只注册 Python 函数名导致任务无法分派 | `app/workers/tasks.py`、`tests/unit/test_worker_settings.py` |
+| 2026-08-25 | Job 生命周期时间在 ORM 显式使用 timezone-aware DateTime | 迁移已是 TIMESTAMPTZ，但 ORM 推断为无时区类型，asyncpg 拒绝绑定 UTC aware datetime | `app/models/job.py`、`tests/unit/test_models_orm.py` |
+| 2026-08-25 | 生产 ingestion 使用 Loader registry + Chunker，并为全部 compatible active versions 重建全局 snapshot | 修复真实论文 0 chunks 和“新文档覆盖旧索引”问题 | `app/services/ingestion.py`、`app/index/manager.py`、`app/workers/tasks.py` |
+| 2026-08-25 | PDF 同页连续文本块先合并再按句切分，句子拼接显式补空格；默认每块最多合并 12 句 | PyMuPDF 常按行/块输出；逐段切分导致极小 chunk、词粘连和 evidence 跨界 | `app/chunking/pipeline.py`、`app/chunking/models.py`、`docs/spec.md` |
+| 2026-08-25 | Search/Session/Chat/SSE 挂载真实 API，检索采用 Dense+BM25+RRF+rerank（rerank 失败可降级） | 完成前后端可用闭环并保留稳定降级语义 | `app/api/`、`app/services/retrieval.py`、`app/main.py` |
 
 ## 8. 验证记录
 
@@ -183,6 +202,10 @@ max_upload_bytes: 104857600
 | 2026-08-24 | Phase 3 loaders | `uv run ruff check .`、`ruff format --check .`、`mypy app`(55)、`pytest -q` | ruff/mypy 通过；87 单测通过、3 集成测试 skipped |
 | 2026-08-24 | Phase 4 chunking | `uv run ruff check .`、`ruff format --check .`、`mypy app`(59)、`pytest -q` | ruff/mypy 通过；116 单测通过、3 集成测试 skipped |
 | 2026-08-24 | Phase 5 dense index | `uv run ruff check .`、`ruff format --check .`、`mypy app`(65)、`pytest -q` | ruff/mypy 通过；160 单测通过、3 集成测试 skipped |
+| 2026-08-25 | 本机运行环境 | `docker compose up -d`、`alembic upgrade head`、private benchmark validator | PostgreSQL/Redis healthy；迁移到 `0001_initial`；benchmark 60 条校验通过 |
+| 2026-08-25 | 恢复实现质量门 | `ruff check .`、`ruff format --check .`、`mypy app`、`pytest -q`；迁移测试 `--run-integration`；前端 lint/typecheck/test/build | 后端 247 单测通过、3 个 PostgreSQL 迁移集成测试通过；mypy 81 文件通过；前端 6 测试和生产 build 通过 |
+| 2026-08-25 | 六论文本机 E2E | 真实 reindex、`POST /api/v1/search`、创建 session、`POST /api/v1/chat` | 6 篇全部 ready；全局索引可重载；search/chat 返回真实 Chunk 和结构化 citations |
+| 2026-08-25 | 私有 benchmark label freeze | validator、`resolve_chunk_labels.py` | 60 条数据契约通过；部分 evidence anchors 因 PDF 抽取字符/表格顺序无法解析，按硬门失败并停止，未生成虚假指标 |
 
 ## 9. 未决事项
 

@@ -206,3 +206,15 @@ def test_chunk_order_matches_document_order() -> None:
     title_indices = [i for i, k in enumerate(kinds) if k == "title"]
     assert len(title_indices) == 2
     assert title_indices[0] < title_indices[1]
+
+
+def test_consecutive_pdf_text_blocks_are_merged_before_sentence_chunking() -> None:
+    repeated = "context " * 280
+    phrase_a = Paragraph(type="text", content="denoising diffusion", page=5)
+    phrase_b = Paragraph(type="text", content="probabilistic models improve synthesis.", page=5)
+    doc = _md_doc([_text(repeated), phrase_a, phrase_b])
+
+    results = chunk_document(doc)
+
+    assert any("denoising diffusion probabilistic models" in chunk.raw_content for chunk in results)
+    assert all(chunk.page_start == chunk.page_end for chunk in results if chunk.page_start)

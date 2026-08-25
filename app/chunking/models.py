@@ -19,7 +19,7 @@ class ChunkConfig:
     small_document_not_chunk: bool = True
     small_document_char_threshold: int = 2048
     max_chunk_chars: int = 800
-    sentence_merge_num: int = 6
+    sentence_merge_num: int = 12
     sentence_on: bool = True
     table_on: bool = True
     title_chunk_on: bool = True

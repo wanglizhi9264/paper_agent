@@ -61,4 +61,8 @@ Thumbs.db
 
 # Eval outputs (large)
 eval/results/
+
+# Private benchmark corpus / labels
+eval/private_benchmark/
+.run/
 eval/runs/

@@ -154,7 +154,8 @@ def test_migration_metadata_matches_orm(isolated_db_url: str) -> None:
 
     reflected = asyncio.run(_reflect())
     orm_tables = set(Base.metadata.tables)
-    reflected_tables = set(reflected.tables)
+    # Alembic owns its version table; it is intentionally not represented by an ORM model.
+    reflected_tables = set(reflected.tables) - {"alembic_version"}
     assert orm_tables == reflected_tables, (
         f"only in ORM: {orm_tables - reflected_tables}; only in DB: {reflected_tables - orm_tables}"
     )

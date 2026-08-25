@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
-from sqlalchemy import create_engine, event, select
+from sqlalchemy import DateTime, create_engine, event, select
 from sqlalchemy.orm import Session as DBSession
 
 import app.models  # noqa: F401
@@ -59,6 +59,13 @@ def test_document_defaults(sqlite_session: DBSession) -> None:
     assert fetched.status == DocumentStatus.UPLOADED
     assert fetched.chunk_count == 0
     assert fetched.created_at is not None
+
+
+def test_job_lifecycle_timestamps_are_timezone_aware() -> None:
+    for name in ("started_at", "finished_at"):
+        column_type = IngestionJob.__table__.c[name].type
+        assert isinstance(column_type, DateTime)
+        assert column_type.timezone is True
 
 
 def test_document_version_and_chunk_relationship(sqlite_session: DBSession) -> None:

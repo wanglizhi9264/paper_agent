@@ -46,6 +46,11 @@ class E5Adapter:
             device=s.embedding_device,
         )
         dim = model.get_sentence_embedding_dimension()
+        if dim is None or dim <= 0:
+            raise EmbeddingError(
+                "embedding model did not report a positive dimension",
+                code="EMBEDDING_UNAVAILABLE",
+            )
         manifest = ModelManifest(
             model_id=s.embedding_model,
             revision=s.embedding_revision or "unknown",

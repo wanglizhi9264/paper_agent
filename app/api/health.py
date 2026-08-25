@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Response
@@ -8,7 +9,8 @@ from pydantic import BaseModel
 from sqlalchemy import text
 
 from app.core.logging import get_logger
-from app.db.session import get_engine
+from app.db.session import get_engine, get_sessionmaker
+from app.models.index_snapshot import IndexSnapshot, SystemState
 
 router = APIRouter(prefix="/health", tags=["health"])
 logger = get_logger(__name__)
@@ -59,9 +61,21 @@ async def _check_redis() -> ComponentHealth:
         return ComponentHealth(status="down", detail=type(exc).__name__)
 
 
-def _check_index_snapshot() -> ComponentHealth:
-    """Phase 0: no active snapshot yet. Returns not_initialized, not a failure."""
-    return ComponentHealth(status="ok", detail="not_initialized")
+async def _check_index_snapshot() -> ComponentHealth:
+    """Validate the active DB pointer and both durable index artifacts."""
+    try:
+        async with get_sessionmaker()() as session:
+            state = await session.get(SystemState, 1)
+            if state is None or state.active_index_snapshot_id is None:
+                return ComponentHealth(status="ok", detail="not_initialized")
+            snapshot = await session.get(IndexSnapshot, state.active_index_snapshot_id)
+            if snapshot is None or not snapshot.faiss_path or not snapshot.bm25_path:
+                return ComponentHealth(status="down", detail="invalid_active_snapshot")
+            if not Path(snapshot.faiss_path).is_file() or not Path(snapshot.bm25_path).is_file():
+                return ComponentHealth(status="down", detail="index_artifact_missing")
+            return ComponentHealth(status="ok", detail=str(snapshot.id))
+    except Exception as exc:
+        return ComponentHealth(status="down", detail=type(exc).__name__)
 
 
 @router.get("/live", response_model=LiveResponse)
@@ -74,7 +88,7 @@ async def ready(response: Response) -> ReadyResponse:
     pg, redis_h, index = await asyncio.gather(
         _check_postgres(),
         _check_redis(),
-        asyncio.to_thread(_check_index_snapshot),
+        _check_index_snapshot(),
     )
     components = {"postgres": pg, "redis": redis_h, "index": index}
     if any(c.status == "down" for c in components.values()):

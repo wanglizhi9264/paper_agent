@@ -19,6 +19,7 @@ def test_ready_reports_503_when_postgres_down(client, monkeypatch) -> None:
         return health.ComponentHealth(status="ok")
 
     monkeypatch.setattr(health, "_check_redis", _ok_redis)
+    monkeypatch.setattr(health, "_check_index_snapshot", _ok_redis)
 
     resp = client.get("/health/ready")
     assert resp.status_code == 503
@@ -34,6 +35,7 @@ def test_ready_ok_when_all_components_ok(client, monkeypatch) -> None:
 
     monkeypatch.setattr(health, "_check_postgres", _ok)
     monkeypatch.setattr(health, "_check_redis", _ok)
+    monkeypatch.setattr(health, "_check_index_snapshot", _ok)
 
     resp = client.get("/health/ready")
     assert resp.status_code == 200

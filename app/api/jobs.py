@@ -27,9 +27,9 @@ def _to_out(j: IngestionJob) -> JobOut:
     return JobOut(
         id=j.id,
         document_id=j.document_id,
-        kind=j.kind.value if hasattr(j.kind, "value") else str(j.kind),
-        status=j.status.value if hasattr(j.status, "value") else str(j.status),
-        stage=j.stage.value if hasattr(j.stage, "value") else str(j.stage),
+        kind=j.kind if type(j.kind) is str else j.kind.value,
+        status=j.status if type(j.status) is str else j.status.value,
+        stage=j.stage if type(j.stage) is str else j.stage.value,
         progress=j.progress,
         attempt=j.attempt,
         error_code=j.error_code,
@@ -59,9 +59,12 @@ async def retry_job(
     settings = get_settings()
     service = DocumentService(settings, ArqEnqueuer(settings))
     new_job = await service.retry_job(session, job_id)
+    enqueue_kind = next(
+        kind for kind in ("ingest", "reindex", "delete_cleanup") if new_job.kind == kind
+    )
     request.state.pending_enqueue = (
         str(new_job.id),
-        new_job.kind.value,
+        enqueue_kind,
         str(new_job.document_id),
         new_job.attempt,
     )

@@ -1,8 +1,8 @@
 # Paper RAG Assistant 技术规格
 
-> 状态：Approved for implementation  
-> 版本：1.0.0  
-> 最后更新：2026-08-24  
+> 状态：Approved for implementation（实现重新验收中）
+> 版本：1.1.0
+> 最后更新：2026-08-25
 > 目标环境：单机、单用户、NVIDIA RTX 2060（按 6 GB 显存预算）
 
 ## 1. 文档约定
@@ -337,7 +337,7 @@ class Paragraph:
 small_document_not_chunk: true
 small_document_char_threshold: 2048
 max_chunk_chars: 800
-sentence_merge_num: 6
+sentence_merge_num: 12
 sentence_on: true
 table_on: true
 title_chunk_on: true
@@ -652,6 +652,30 @@ event: error      data: {error:{code,message,request_id}}
 10. 至少 50 条人工标注检索问题和完整消融报告；
 11. 所有质量门通过，README 能在全新环境复现启动；
 12. 不存在文档中未说明的关键默认值、硬编码模型维度或隐式外部服务。
+
+### 22.1 生产闭环硬门
+
+“独立模块存在”或“使用 fake 的单元测试通过”不得视为对应 Phase 完成。MVP 发布还必须同时通过：
+
+1. 生产 ARQ Worker 不得使用 `_DefaultFakeParser`、`_DefaultFakeChunker` 或 fake indexer；上传文本型 PDF 后，页数、字符数和 Chunk 数必须来自真实 Loader/Chunker，且非空论文 `chunk_count > 0`；
+2. active IndexSnapshot 必须同时包含所有当前 `ready` 文档的 active DocumentVersion，FAISS、BM25、manifest 和数据库映射必须一致；连续上传第 N 篇论文不得使前 N-1 篇从索引消失；
+3. `POST /api/v1/search` 必须在 `all`、`documents`、`collection` 三种 scope 下完成 Dense + BM25 + RRF，返回可回溯的真实 Chunk；
+4. Session、非流式 chat 与 SSE chat API 必须挂载到 `app.main`，并通过真实 HTTP 生命周期测试；LLM 不可用时返回稳定 503，不得伪造成功回答；
+5. 前端 Documents、Collections、Chat 必须连接真实后端，不得依赖不存在的 endpoint；
+6. 私有 6 文档 / 60 问题 benchmark 必须先解析全部 evidence labels，再生成 predictions 和 metrics；任何 answerable 样本 label 无法解析必须失败；
+7. 全新数据库上的真实 PostgreSQL/Redis E2E 必须覆盖“上传 → ready → search → chat/citation → reindex → delete”，并证明失败不破坏旧 active snapshot；
+8. README 的状态和 Quick Start 必须与实际生产 wiring 一致；禁止以历史 Phase 声明覆盖当前失败证据。
+
+### 22.2 本机验收标准
+
+本项目在目标 Windows/RTX 2060 主机上的发布验收标准为：
+
+- 基础质量门：Ruff、format、mypy、pytest（含 PostgreSQL/Redis integration）、前端 lint/typecheck/test/build 全部通过；
+- 语料门：指定 6 份 PDF 的 SHA-256 与 private benchmark manifest 全部匹配，全部文档真实 `ready`、页数合理且 `chunk_count > 0`；
+- 索引门：active manifest 包含 6 个 document/version 映射，FAISS 与 BM25 可从磁盘重载，重启后同一查询 top-k 稳定；
+- API 门：health、documents、collections、jobs、search、sessions、chat 与 SSE 均有成功和失败路径验证；
+- 评测门：先保存 dev/test baseline；候选质量门为 Recall@10 ≥ 0.85、Citation Precision ≥ 0.95、Citation Recall ≥ 0.85、Unanswerable rejection ≥ 0.80。首次真实 baseline 未达门时不得伪称通过，必须保存结果和错误分类；
+- 恢复门：reindex 失败继续使用旧版本检索，delete 后所有 scope 不再返回被删文档，Worker/API 重启后 queued/running job 可恢复或明确失败重试。
 
 ## 23. 参考资料
 

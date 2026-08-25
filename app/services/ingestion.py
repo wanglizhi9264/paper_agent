@@ -1,8 +1,8 @@
-"""Ingestion pipeline — Phase 2 fake implementation.
+"""Ingestion pipeline for parse, chunk, embed, and corpus snapshot activation.
 
-The real parse/chunk/embed/index stages arrive in Phases 3-7. This module
-provides a deterministic, DB-session-driven state-machine runner so the
-worker, API and tests can exercise the full lifecycle today:
+Production workers inject the registered loader, deterministic chunker, and
+configured embedding provider. Lightweight fakes remain available only for
+isolated state-machine tests:
 
     queued -> parsing -> chunking -> embedding -> indexing -> finalizing -> ready
 
@@ -22,21 +22,20 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
 
-import numpy as np
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
+from app.loaders.base import LoaderError, ParsedDocument
+from app.loaders.registry import get_loader
 from app.models.chunk import DocumentVersion
 from app.models.document import Document
 from app.models.enums import (
     DocumentStatus,
     DocumentVersionStatus,
-    IndexSnapshotStatus,
     JobStage,
     JobStatus,
 )
-from app.models.index_snapshot import IndexSnapshot, SystemState
 from app.models.job import IngestionJob
 
 logger = get_logger(__name__)
@@ -46,13 +45,14 @@ class FileRemover(Protocol):
     def __call__(self, stored_filename: str) -> None: ...
 
 
-# Stable parser/chunk config marker for the Phase 2 fake.
+# Stable parser/chunk config markers persisted in DocumentVersion manifests.
 FAKE_PARSER_VERSION = "fake-1.0"
-FAKE_CHUNK_CONFIG = {
+PRODUCTION_PARSER_VERSION = "loader-registry-1.0"
+DEFAULT_CHUNK_CONFIG = {
     "small_document_not_chunk": True,
     "small_document_char_threshold": 2048,
     "max_chunk_chars": 800,
-    "sentence_merge_num": 6,
+    "sentence_merge_num": 12,
     "sentence_on": True,
     "table_on": True,
     "title_chunk_on": True,
@@ -62,6 +62,8 @@ FAKE_CHUNK_CONFIG = {
     "md_heading_max_level": 10,
     "neighbor_window": 1,
 }
+# Backwards-compatible test fixture name.
+FAKE_CHUNK_CONFIG = DEFAULT_CHUNK_CONFIG
 
 
 class PipelineError(Exception):
@@ -95,6 +97,30 @@ class _DefaultFakeChunker:
         return 0
 
 
+class RealDocumentParser:
+    """Load the durable upload through the registered production Loader."""
+
+    def __init__(self, path: Path, extension: str) -> None:
+        self._path = path
+        self._extension = extension
+        self.parsed_document: ParsedDocument | None = None
+        self.version = PRODUCTION_PARSER_VERSION
+
+    def parse(self, document: Document) -> tuple[int, int]:
+        try:
+            parsed = get_loader(self._extension).load(self._path)
+        except LoaderError as exc:
+            raise PipelineError(str(exc), code=exc.code) from exc
+        self.parsed_document = parsed
+        pages = [paragraph.page for paragraph in parsed.paragraphs if paragraph.page is not None]
+        page_count = int(parsed.metadata.get("page_count") or (max(pages) if pages else 1))
+        character_count = sum(len(paragraph.content) for paragraph in parsed.paragraphs)
+        if character_count <= 0:
+            raise PipelineError("document contains no extractable text", code="EMPTY_DOCUMENT")
+        document.title = parsed.title or Path(document.filename).stem
+        return page_count, character_count
+
+
 class RealChunker:
     """Runs the deterministic chunking pipeline against a ParsedDocument.
 
@@ -111,7 +137,10 @@ class RealChunker:
         from app.models.chunk import Chunk as ChunkORM
         from app.models.enums import ChunkKind
 
-        results = chunk_document(self._parsed, ChunkConfig.default())
+        parsed = getattr(self._parsed, "parsed_document", self._parsed)
+        if parsed is None:
+            raise PipelineError("parser did not produce a ParsedDocument", code="PARSER_ERROR")
+        results = chunk_document(parsed, ChunkConfig.default())
         kind_map = {
             "text": ChunkKind.TEXT,
             "title": ChunkKind.TITLE,
@@ -208,6 +237,8 @@ async def run_ingest(
     """
     if job.status == JobStatus.SUCCEEDED:
         return
+    prior_active_version_id = document.active_document_version_id
+    parser_version = getattr(parser, "version", FAKE_PARSER_VERSION)
     await _pg_advisory_lock(session, _doc_lock_key(document.id))
     await _set_job(session, job, status=JobStatus.RUNNING, stage=JobStage.QUEUED, progress=5)
     await _set_doc_status(document, DocumentStatus.PARSING)
@@ -223,8 +254,9 @@ async def run_ingest(
         version = DocumentVersion(
             document_id=document.id,
             status=DocumentVersionStatus.BUILDING,
-            parser_version=FAKE_PARSER_VERSION,
-            chunk_config=FAKE_CHUNK_CONFIG,
+            parser_version=parser_version,
+            chunk_config=DEFAULT_CHUNK_CONFIG,
+            chunks=[],
         )
         session.add(version)
         await session.flush()
@@ -233,24 +265,12 @@ async def run_ingest(
         version.chunk_count = chunk_count
         version.character_count = char_count
 
-        # Embedding stage (spec §13.1): embed chunkable chunks and build FAISS.
-        faiss_id_map: dict[int, uuid.UUID] = {}
+        # Embedding stage: rebuild one immutable snapshot for the whole compatible corpus.
         if embedding_provider is not None and chunk_count > 0:
             await _set_doc_status(document, DocumentStatus.EMBEDDING)
             await _set_job(
                 session, job, status=JobStatus.RUNNING, stage=JobStage.EMBEDDING, progress=70
             )
-
-            from sqlalchemy import func as sa_func
-            from sqlalchemy import select as sa_select
-
-            from app.index.faiss_index import FaissIndex
-            from app.index.snapshot import (
-                build_manifest,
-                save_manifest,
-                validate_manifest,
-            )
-            from app.models.chunk import Chunk
 
             manifest_emb = embedding_provider.manifest
             version.embedding_model_id = manifest_emb.model_id
@@ -258,88 +278,19 @@ async def run_ingest(
             version.embedding_dimension = manifest_emb.dimension
             version.embedding_signature = manifest_emb.signature
 
-            result_chunks = await session.execute(
-                sa_select(Chunk)
-                .where(Chunk.document_version_id == version.id)
-                .order_by(Chunk.chunk_index)
+            await _set_doc_status(document, DocumentStatus.INDEXING)
+            await _set_job(
+                session, job, status=JobStatus.RUNNING, stage=JobStage.INDEXING, progress=90
             )
-            chunkable = [
-                c
-                for c in result_chunks.scalars().all()
-                if not (c.metadata_ and c.metadata_.get("code_not_add_index"))
-            ]
+            from app.index.manager import build_corpus_snapshot
 
-            if chunkable:
-                texts = [c.retrieval_content for c in chunkable]
-                emb_result = embedding_provider.embed_texts(texts, is_query=False)
-
-                max_id_result = await session.execute(sa_select(sa_func.max(Chunk.faiss_id)))
-                max_faiss_id = max_id_result.scalar() or -1
-                faiss_ids = np.arange(
-                    max_faiss_id + 1, max_faiss_id + 1 + len(chunkable), dtype=np.int64
-                )
-                for i, c in enumerate(chunkable):
-                    c.faiss_id = int(faiss_ids[i])
-                    c.token_count = None
-                    faiss_id_map[int(faiss_ids[i])] = c.id
-
-                faiss_idx = FaissIndex.create(manifest_emb.dimension)
-                faiss_idx.add_texts(emb_result.vectors, faiss_ids, normalize=False)
-
-                await _set_doc_status(document, DocumentStatus.INDEXING)
-                await _set_job(
-                    session, job, status=JobStatus.RUNNING, stage=JobStage.INDEXING, progress=90
-                )
-
-                if indexes_dir is None:
-                    indexes_dir = Path("./storage/indexes")
-                snap_dir = indexes_dir / str(version.id)
-                snap_dir.mkdir(parents=True, exist_ok=True)
-                faiss_path = snap_dir / "index.faiss"
-                manifest_path = snap_dir / "manifest.json"
-                faiss_idx.save(faiss_path)
-
-                manifest = build_manifest(
-                    manifest_embedding=manifest_emb,
-                    faiss_path=faiss_path,
-                    document_versions={str(document.id): str(version.id)},
-                    document_count=1,
-                    chunk_count=len(chunkable),
-                    max_faiss_id=int(faiss_ids[-1]) if len(faiss_ids) > 0 else 0,
-                )
-                save_manifest(manifest, manifest_path)
-                validate_manifest(
-                    manifest,
-                    faiss_path=faiss_path,
-                    expected_embedding_signature=manifest_emb.signature,
-                    expected_dimension=manifest_emb.dimension,
-                )
-
-                snapshot = IndexSnapshot(
-                    status=IndexSnapshotStatus.ACTIVE,
-                    embedding_signature=manifest_emb.signature,
-                    faiss_path=str(faiss_path),
-                    manifest_sha256=manifest.sha256,
-                    manifest=manifest.to_dict(),
-                    document_count=1,
-                    chunk_count=len(chunkable),
-                    max_faiss_id=int(faiss_ids[-1]) if len(faiss_ids) > 0 else 0,
-                    activated_at=datetime.now(UTC),
-                )
-                session.add(snapshot)
-                await session.flush()
-
-                # Update SystemState singleton.
-                sys_state = await session.get(SystemState, 1)
-                if sys_state is None:
-                    sys_state = SystemState(id=1)
-                    session.add(sys_state)
-                old_snapshot_id = sys_state.active_index_snapshot_id
-                if old_snapshot_id is not None:
-                    old = await session.get(IndexSnapshot, old_snapshot_id)
-                    if old is not None and old.status == IndexSnapshotStatus.ACTIVE:
-                        old.status = IndexSnapshotStatus.SUPERSEDED
-                sys_state.active_index_snapshot_id = snapshot.id
+            await build_corpus_snapshot(
+                session,
+                pending_document=document,
+                pending_version=version,
+                embedding_provider=embedding_provider,
+                indexes_dir=indexes_dir or Path("./storage/indexes"),
+            )
         else:
             await _set_doc_status(document, DocumentStatus.EMBEDDING)
             await _set_job(
@@ -353,7 +304,7 @@ async def run_ingest(
         # Finalize: mark version ready and atomically switch the document pointer.
         version.status = DocumentVersionStatus.READY
         document.active_document_version_id = version.id
-        document.parser_version = FAKE_PARSER_VERSION
+        document.parser_version = parser_version
         document.chunk_count = chunk_count
         await _set_doc_status(document, DocumentStatus.READY)
         await _set_job(
@@ -378,7 +329,11 @@ async def run_ingest(
             error_code=exc.code,
             error_message=str(exc),
         )
-        await _set_doc_status(document, DocumentStatus.FAILED, str(exc))
+        await _set_doc_status(
+            document,
+            DocumentStatus.READY if prior_active_version_id is not None else DocumentStatus.FAILED,
+            str(exc),
+        )
         logger.warning(
             "ingest_failed",
             document_id=str(document.id),
@@ -395,7 +350,11 @@ async def run_ingest(
             error_code="INTERNAL_ERROR",
             error_message=type(exc).__name__,
         )
-        await _set_doc_status(document, DocumentStatus.FAILED, type(exc).__name__)
+        await _set_doc_status(
+            document,
+            DocumentStatus.READY if prior_active_version_id is not None else DocumentStatus.FAILED,
+            type(exc).__name__,
+        )
         logger.exception("ingest_crashed", document_id=str(document.id), job_id=str(job.id))
 
 
@@ -455,8 +414,10 @@ def _dispatch_kind(job: IngestionJob) -> str:
 
 
 __all__ = [
+    "DEFAULT_CHUNK_CONFIG",
     "FAKE_CHUNK_CONFIG",
     "FAKE_PARSER_VERSION",
+    "PRODUCTION_PARSER_VERSION",
     "FileRemover",
     "PipelineError",
     "run_delete_cleanup",
