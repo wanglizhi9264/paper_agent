@@ -140,9 +140,7 @@ def test_subprocess_result_is_loaded_without_logging_content(
         del kwargs
         output = Path(argv[argv.index("-o") + 1])
         output.mkdir(parents=True)
-        (output / "paper_content_list.json").write_text(
-            json.dumps(_payload()), encoding="utf-8"
-        )
+        (output / "paper_content_list.json").write_text(json.dumps(_payload()), encoding="utf-8")
         return subprocess.CompletedProcess(argv, 0, stdout=b"private text", stderr=b"")
 
     monkeypatch.setattr(subprocess, "run", succeed)

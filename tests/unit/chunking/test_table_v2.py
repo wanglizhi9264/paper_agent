@@ -111,6 +111,21 @@ def test_table_metadata_contains_element_cells_pages_and_bboxes() -> None:
     assert row.raw_content.startswith("| Row |")
 
 
+def test_raw_table_text_fallback_is_indexed_and_bound_to_parent() -> None:
+    element = _multi_header_table().model_copy(
+        update={"metadata": {"raw_table_text": "Action2Motion 0.33 94.9"}}
+    )
+
+    chunks = chunk_document_ir(make_ir(elements=[element]))
+
+    parent = next(chunk for chunk in chunks if chunk.metadata["chunk_subtype"] == "table_parent")
+    raw = next(chunk for chunk in chunks if chunk.metadata["chunk_subtype"] == "table_raw_text")
+    assert raw.add_to_index is True
+    assert raw.parent_chunk_index == parent.chunk_index
+    assert raw.raw_content == "Action2Motion 0.33 94.9"
+    assert "Table 2" in raw.retrieval_content
+
+
 def test_table_chunking_is_deterministic_except_business_ids() -> None:
     ir = make_ir(elements=[_multi_header_table()])
     first = chunk_document_ir(ir)
@@ -142,7 +157,9 @@ def test_nine_table_hard_case_contract_proxies_bind_headers_and_values(
     case_id: str, row_label: str, headers: list[str], values: list[str]
 ) -> None:
     cells = [_cell(0, 0, "Method", column_header=True, row_header=True)]
-    cells.extend(_cell(0, index + 1, header, column_header=True) for index, header in enumerate(headers))
+    cells.extend(
+        _cell(0, index + 1, header, column_header=True) for index, header in enumerate(headers)
+    )
     cells.append(_cell(1, 0, row_label, row_header=True))
     cells.extend(_cell(1, index + 1, value) for index, value in enumerate(values))
     table = make_table_data(cells, row_count=2, column_count=len(headers) + 1, header_rows=[0])
@@ -175,7 +192,9 @@ def test_eval_030_paragraph_relation_remains_in_one_chunk() -> None:
         provenance=[SourceSpan(physical_page=3)],
     )
     chunks = chunk_document_ir(make_ir(elements=[element]))
-    assert any("13.61 min" in chunk.raw_content and "13.09 min" in chunk.raw_content for chunk in chunks)
+    assert any(
+        "13.61 min" in chunk.raw_content and "13.09 min" in chunk.raw_content for chunk in chunks
+    )
 
 
 def test_long_row_groups_on_header_path_not_character_boundary() -> None:

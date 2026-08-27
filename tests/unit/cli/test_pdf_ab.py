@@ -117,9 +117,7 @@ def test_mineru_candidate_uses_adapter(monkeypatch: pytest.MonkeyPatch, tmp_path
             return ir
 
     monkeypatch.setattr(pdf_ab, "_build_parser", lambda _name: FakeMinerUParser())
-    entry = pdf_ab._run_one_parser(
-        "mineru", FIXTURE, uuid4(), tmp_path, ["Sample paragraph"], None
-    )
+    entry = pdf_ab._run_one_parser("mineru", FIXTURE, uuid4(), tmp_path, ["Sample paragraph"], None)
     assert entry["ok"] is True
     assert entry["parser_manifest"]["parser_id"] == "mineru"
     assert (tmp_path / "mineru" / "document_ir.json").exists()

@@ -145,9 +145,7 @@ class V2PDFDocumentParser:
             "V2 PDF parsing requires a building DocumentVersion", code="PDF_LAYOUT_INVALID"
         )
 
-    def parse_version(
-        self, document: Document, version: DocumentVersion
-    ) -> tuple[int, int]:
+    def parse_version(self, document: Document, version: DocumentVersion) -> tuple[int, int]:
         from app.document_ir.errors import ParseError
         from app.document_ir.validate import validate_document_ir
         from app.loaders.pdf_router import get_pdf_parser
@@ -432,7 +430,9 @@ async def run_ingest(
         # transaction later fails, startup reconciliation quarantines the orphan.
         if artifact_manager is not None and version.ir_path is not None:
             if version.parser_signature is None:
-                raise PipelineError("V2 version has no parser signature", code="IR_ARTIFACT_INVALID")
+                raise PipelineError(
+                    "V2 version has no parser signature", code="IR_ARTIFACT_INVALID"
+                )
             try:
                 activated = artifact_manager.activate(version.id, version.parser_signature)
             except Exception as exc:
@@ -472,9 +472,7 @@ async def run_ingest(
         if version is not None:
             version.status = DocumentVersionStatus.FAILED
             version.failed_at = datetime.now(UTC)
-        await _restore_prior_activation(
-            session, document, prior_active_version_id, new_snapshot
-        )
+        await _restore_prior_activation(session, document, prior_active_version_id, new_snapshot)
         if artifact_manager is not None and version is not None:
             try:
                 artifact_manager.fail(version.id, job.id)
@@ -508,9 +506,7 @@ async def run_ingest(
         if version is not None:
             version.status = DocumentVersionStatus.FAILED
             version.failed_at = datetime.now(UTC)
-        await _restore_prior_activation(
-            session, document, prior_active_version_id, new_snapshot
-        )
+        await _restore_prior_activation(session, document, prior_active_version_id, new_snapshot)
         if artifact_manager is not None and version is not None:
             try:
                 artifact_manager.fail(version.id, job.id)
@@ -567,9 +563,7 @@ async def run_delete_cleanup(
             version_ids = (
                 (
                     await session.execute(
-                        select(DocumentVersion.id).where(
-                            DocumentVersion.document_id == document.id
-                        )
+                        select(DocumentVersion.id).where(DocumentVersion.document_id == document.id)
                     )
                 )
                 .scalars()

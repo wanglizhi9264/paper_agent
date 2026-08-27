@@ -38,6 +38,7 @@ from app.document_ir.normalize import (
     normalize_for_retrieval,
 )
 from app.document_ir.serialize import compute_parser_signature
+from app.loaders.base import normalize_text
 
 # --- Tuning constants (deterministic, documented) -------------------------
 
@@ -57,6 +58,7 @@ _BULLET_RE = re.compile(r"^(?:[-*•]|\d+[.)])\s+")
 _CAPTION_RE = re.compile(r"^(?:Table|Figure|Fig\.|表|图)\s*\S{0,12}")
 _NUMERIC_RE = re.compile(r"^[±+]?\d")
 _FORMULA_CHARS = set("εθΣμΠπΦφ±≤≥≠∑∫∂∇−×÷≈√")
+_DECIMAL_CONTINUATION_RE = re.compile(r"^\.\d")
 
 
 def _looks_like_formula(text: str) -> bool:
@@ -80,6 +82,53 @@ class _HasParse(Protocol):
 
 def _bbox(values: list[float]) -> BoundingBox:
     return BoundingBox(x0=values[0], y0=values[1], x1=values[2], y1=values[3])
+
+
+def repair_extracted_table_rows(
+    rows_text: list[list[str]],
+    row_boxes: list[list[list[float] | None]],
+) -> tuple[list[list[str]], list[list[list[float] | None]], bool]:
+    """Expand aligned multiline cells and stitch split decimal fragments.
+
+    Scientific tables often encode several visual rows inside one detected
+    cell.  When two or more cells have the same multiline cardinality, their
+    lines are positionally aligned and can be expanded without guessing.
+    PyMuPDF's text strategy can also split ``9.46`` into adjacent ``9`` and
+    ``.46`` cells; joining only that unambiguous pattern preserves columns
+    while restoring searchable numeric tokens.
+    """
+    repaired_rows: list[list[str]] = []
+    repaired_boxes: list[list[list[float] | None]] = []
+    expanded_any = False
+    for row_index, row in enumerate(rows_text):
+        parts = [cell.splitlines() or [""] for cell in row]
+        multiline_counts = [len(value) for value in parts if len(value) > 1]
+        expansion = max(multiline_counts, default=1)
+        aligned = (
+            expansion > 1
+            and len(multiline_counts) >= 2
+            and all(count == expansion for count in multiline_counts)
+        )
+        box_row = row_boxes[row_index] if row_index < len(row_boxes) else [None] * len(row)
+        for line_index in range(expansion if aligned else 1):
+            expanded_row = [
+                value[line_index]
+                if aligned and len(value) == expansion
+                else value[0]
+                if line_index == 0
+                else ""
+                for value in parts
+            ]
+            for column in range(1, len(expanded_row)):
+                previous = expanded_row[column - 1].strip()
+                current = expanded_row[column].lstrip()
+                if previous.isdigit() and _DECIMAL_CONTINUATION_RE.match(current):
+                    expanded_row[column - 1] = ""
+                    expanded_row[column] = previous + current
+            repaired_rows.append(expanded_row)
+            repaired_boxes.append(list(box_row))
+        expanded_any = expanded_any or aligned
+    return repaired_rows, repaired_boxes, expanded_any
 
 
 # --- Extraction primitives (pymupdf side) --------------------------------
@@ -137,8 +186,23 @@ def _extract_pages_payload(path: Path) -> dict[str, Any]:
 
             tables: list[dict[str, Any]] = []
             found = page.find_tables()  # type: ignore[no-untyped-call]
+            detection_strategy = "lines"
+            has_table_caption = any(
+                _CAPTION_RE.match(line["text"].strip())
+                for block in blocks
+                for line in block["lines"]
+            )
+            if not found.tables and has_table_caption:
+                # Borderless scientific tables are common.  PyMuPDF's default
+                # line-based detector intentionally ignores them, while its
+                # text strategy can recover their row/column primitives.  The
+                # caption gate avoids treating arbitrary prose pages as tables.
+                found = page.find_tables(strategy="text")  # type: ignore[no-untyped-call]
+                detection_strategy = "text"
             for tab in found.tables:
-                rows_text = tab.extract()
+                rows_text = [
+                    ["" if cell is None else str(cell) for cell in row] for row in tab.extract()
+                ]
                 row_boxes: list[list[list[float] | None]] = []
                 geometry_verified = True
                 pymupdf_rows = getattr(tab, "rows", None) or []
@@ -163,14 +227,24 @@ def _extract_pages_payload(path: Path) -> dict[str, Any]:
                     and float(tab.bbox[2]) <= width + 1.0
                     and float(tab.bbox[3]) <= height + 1.0
                 )
+                rows_text, row_boxes, expanded_rows = repair_extracted_table_rows(
+                    rows_text, row_boxes
+                )
+                raw_table_text = normalize_text(
+                    str(page.get_text("text", clip=tab.bbox, sort=True))  # type: ignore[no-untyped-call]
+                ).strip()
                 tables.append(
                     {
                         "bbox": [float(v) for v in tab.bbox],
-                        "row_count": int(tab.row_count),
+                        "row_count": len(rows_text),
                         "col_count": int(tab.col_count),
-                        "rows_text": [[str(c) for c in row] for row in rows_text],
+                        "rows_text": rows_text,
                         "cell_bboxes": row_boxes,
-                        "geometry_verified": geometry_verified and bool(table_bbox_verified),
+                        "geometry_verified": geometry_verified
+                        and bool(table_bbox_verified)
+                        and not expanded_rows,
+                        "detection_strategy": detection_strategy,
+                        "raw_table_text": raw_table_text,
                     }
                 )
 
@@ -580,6 +654,10 @@ def build_document_ir(
                     section_path=current_section_path,
                     provenance=[SourceSpan(physical_page=page_number, bbox=_bbox(table["bbox"]))],
                     table=built,
+                    metadata={
+                        "table_detection_strategy": table.get("detection_strategy", "lines"),
+                        "raw_table_text": str(table.get("raw_table_text", "")),
+                    },
                 )
             )
             reading_order += 1

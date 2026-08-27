@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 
 from eval.pdf_v2_release import (
+    LiveAPIAdapter,
     ReleaseGateError,
     evaluate_predictions,
     main,
@@ -13,6 +14,46 @@ from eval.pdf_v2_release import (
     validate_corpus_evidence,
     validate_resolved_dataset,
 )
+
+
+class _FakeResponse:
+    def __init__(self, payload: dict[str, Any]) -> None:
+        self._payload = payload
+
+    def raise_for_status(self) -> None:
+        return None
+
+    def json(self) -> dict[str, Any]:
+        return self._payload
+
+
+class _FakeLiveClient:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str, dict[str, Any] | None]] = []
+        self.chat_count = 0
+
+    def post(self, path: str, json: dict[str, Any]) -> _FakeResponse:
+        self.calls.append(("post", path, json))
+        if path == "/api/v1/sessions":
+            return _FakeResponse({"id": "session-1"})
+        if path == "/api/v1/chat":
+            self.chat_count += 1
+            if self.chat_count == 1:
+                return _FakeResponse({"answer": "history"})
+            return _FakeResponse(
+                {
+                    "answer": "answer [1]",
+                    "citations": [{"chunk_id": "chunk-1"}],
+                    "rewritten_query": "standalone query",
+                }
+            )
+        if path == "/api/v1/search":
+            return _FakeResponse({"results": [{"chunk_id": "chunk-1"}]})
+        raise AssertionError(path)
+
+    def delete(self, path: str) -> _FakeResponse:
+        self.calls.append(("delete", path, None))
+        return _FakeResponse({})
 
 
 def _dataset() -> list[dict[str, Any]]:
@@ -68,6 +109,33 @@ def test_prediction_runner_is_deterministic_and_requires_one_result_per_question
     second = run_predictions(rows, fake)
     assert first == second
     assert len(first) == 60
+
+
+def test_live_adapter_scores_retrieval_after_history_aware_query_rewrite() -> None:
+    client = _FakeLiveClient()
+    adapter = LiveAPIAdapter.__new__(LiveAPIAdapter)
+    adapter._client = client
+    item = {
+        "id": "eval-047",
+        "question": "How much is it after adding that?",
+        "scope": {"type": "all"},
+        "conversation": [
+            {"role": "user", "content": "What is the baseline?"},
+            {"role": "assistant", "content": "The baseline is in Table 3."},
+        ],
+    }
+
+    prediction = adapter.predict(item)
+
+    chat_calls = [call for call in client.calls if call[1] == "/api/v1/chat"]
+    search_calls = [call for call in client.calls if call[1] == "/api/v1/search"]
+    assert [call[2]["query"] for call in chat_calls] == [
+        "What is the baseline?",
+        "How much is it after adding that?",
+    ]
+    assert search_calls[0][2]["query"] == "standalone query"
+    assert prediction["retrieved_chunk_ids"] == ["chunk-1"]
+    assert prediction["predicted_citation_chunk_ids"] == ["chunk-1"]
 
 
 def test_release_metrics_apply_all_four_candidate_thresholds() -> None:

@@ -16,9 +16,10 @@ from app.embedding.registry import get_embedding_provider
 from app.llm.base import LLMMessage
 from app.llm.citations import validate_citations
 from app.llm.openai_compatible import get_llm_provider
+from app.llm.prompts import build_messages, build_system_prompt
 from app.models.enums import MessageRole, MessageStatus
 from app.models.session import Message, Session
-from app.schemas.chat import ChatRequest, ChatResponse, SourceOut
+from app.schemas.chat import BBoxOut, ChatRequest, ChatResponse, CitationOut, SourceOut
 from app.schemas.search import SearchRequest, SearchResponse, SearchScope
 from app.services.query_rewrite import rewrite_query
 from app.services.retrieval import search_corpus
@@ -57,7 +58,7 @@ async def _prepare(
         ).scalars()
     )
     recent.reverse()
-    history = [
+    history: list[tuple[str, str]] = [
         (
             message.role if isinstance(message.role, str) else message.role.value,
             message.content,
@@ -93,7 +94,7 @@ async def _prepare(
             element_id=result.element_id,
             element_kind=result.element_kind,
             cell_ids=result.cell_ids,
-            bboxes=result.bboxes,
+            bboxes=[BBoxOut.model_validate(box) for box in result.bboxes],
             content=result.context_content,
             truncated=False,
         )
@@ -103,14 +104,7 @@ async def _prepare(
             f"Section: {' > '.join(result.section_path)}\nPage: {result.page_start or 'unknown'}\n"
             f"Chunk-ID: {result.chunk_id}\nContent:\n{result.context_content}"
         )
-    messages = [
-        LLMMessage(
-            role="system",
-            content="Answer only from Sources. Cite factual claims with [N].\n\n"
-            + "\n\n".join(blocks),
-        ),
-        LLMMessage(role="user", content=body.query),
-    ]
+    messages = build_messages(build_system_prompt("\n\n".join(blocks)), history, body.query)
     return item, user, search, messages, citation_map, sources
 
 
@@ -126,7 +120,10 @@ async def chat(
             code="LLM_UNAVAILABLE", message="LLM is unavailable."
         ) from exc
     answer, citations, _invalid = validate_citations(response.text, citation_map)
-    citation_data = [{"index": c.index, "chunk_id": c.chunk_id} for c in citations]
+    citation_models = [
+        CitationOut(index=c.index, chunk_id=uuid.UUID(c.chunk_id)) for c in citations
+    ]
+    citation_data = [citation.model_dump(mode="json") for citation in citation_models]
     assistant = Message(
         session_id=body.session_id,
         role=MessageRole.ASSISTANT,
@@ -139,7 +136,7 @@ async def chat(
     return ChatResponse(
         message_id=assistant.id,
         answer=answer,
-        citations=citation_data,
+        citations=citation_models,
         sources=sources,
         rewritten_query=search.rewritten_query,
         degraded_reasons=search.degraded_reasons,
@@ -164,9 +161,7 @@ async def chat_stream(
                 "rewritten_query": search.rewritten_query,
             },
         )
-        yield _event(
-            "sources", {"sources": [source.model_dump(mode="json") for source in sources]}
-        )
+        yield _event("sources", {"sources": [source.model_dump(mode="json") for source in sources]})
         parts: list[str] = []
         try:
             async for chunk in get_llm_provider().stream(messages):

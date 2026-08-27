@@ -21,6 +21,7 @@ from app.loaders.docling_adapter import (
     build_document_ir_from_docling,
     build_table_from_docling,
     check_docling_content,
+    merge_pymupdf_table_fallback,
 )
 
 PAGE_W, PAGE_H = 595.0, 842.0
@@ -189,6 +190,19 @@ def build(fake: dict[str, Any]):
 
 
 class TestTextConversion:
+    def test_nul_removed_from_title_and_text(self) -> None:
+        texts = [text_item(0, text="raw\x00text")]
+        ir = build_document_ir_from_docling(
+            payload(texts=texts, body_refs=["#/texts/0"]),
+            document_id=uuid4(),
+            title="title\x00value",
+            manifest=manifest(),
+        )
+
+        assert ir.title == "titlevalue"
+        assert ir.elements[0].raw_text == "rawtext"
+        assert not validate_document_ir(ir).issues
+
     def test_reading_order_and_kinds(self) -> None:
         texts = [
             text_item(0, label="section_header", text="Intro", level=1),
@@ -296,6 +310,72 @@ class TestTextConversion:
 
 
 class TestTableConversion:
+    def test_pymupdf_fallback_adds_table_on_page_missing_from_docling(self) -> None:
+        primary = build(payload(texts=[text_item(0)], body_refs=["#/texts/0"]))
+        grid = [
+            [grid_cell("Model", 0, 0, column_header=True), grid_cell("FID", 0, 1)],
+            [grid_cell("Ours", 1, 0), grid_cell("3.17", 1, 1)],
+        ]
+        fallback = build(payload(tables=[table_item(0, grid)], body_refs=["#/tables/0"]))
+
+        merged = merge_pymupdf_table_fallback(primary, fallback)
+
+        tables = [element for element in merged.elements if element.kind == "table"]
+        assert len(tables) == 1
+        assert tables[0].metadata["table_fallback"] == "pymupdf"
+        assert merged.quality.table_count == 1
+        assert merged.metadata["pymupdf_table_fallback_count"] == 1
+        assert not validate_document_ir(merged).issues
+
+    def test_pymupdf_fallback_skips_page_with_docling_table(self) -> None:
+        primary_grid = [
+            [grid_cell("Model", 0, 0, column_header=True), grid_cell("FID", 0, 1)],
+            [grid_cell("Docling", 1, 0), grid_cell("3.17", 1, 1)],
+        ]
+        fallback_grid = [
+            [grid_cell("Model", 0, 0, column_header=True), grid_cell("FID", 0, 1)],
+            [grid_cell("Fallback", 1, 0), grid_cell("9.99", 1, 1)],
+        ]
+        primary = build(payload(tables=[table_item(0, primary_grid)], body_refs=["#/tables/0"]))
+        fallback = build(payload(tables=[table_item(0, fallback_grid)], body_refs=["#/tables/0"]))
+
+        merged = merge_pymupdf_table_fallback(primary, fallback)
+
+        assert merged is primary
+        assert "Docling" in merged.elements[0].raw_text
+        assert "Fallback" not in merged.elements[0].raw_text
+
+    def test_nul_removed_from_cell_and_caption(self) -> None:
+        texts = [text_item(0, label="caption", text="cap\x00tion")]
+        grid = [[grid_cell("head\x00er", 0, 0, column_header=True)]]
+        ir = build(
+            payload(
+                texts=texts,
+                tables=[table_item(0, grid, caption_ref="#/texts/0")],
+                body_refs=["#/tables/0"],
+            )
+        )
+
+        table = ir.elements[0].table
+        assert table is not None
+        assert table.caption == "caption"
+        assert table.cells[0].raw_text == "header"
+        assert not validate_document_ir(ir).issues
+
+    def test_unflagged_real_payload_infers_headers(self) -> None:
+        grid = [
+            [grid_cell("Model", 0, 0), grid_cell("FID", 0, 1)],
+            [grid_cell("DDPM", 1, 0), grid_cell("3.17", 1, 1)],
+        ]
+        built, warnings, _spans = build_table_from_docling(table_item(0, grid), {}, {})
+        assert warnings == []
+        assert built is not None
+        assert [cell.normalized_text for cell in built.cells if cell.is_column_header] == [
+            "Model",
+            "FID",
+        ]
+        assert [cell.normalized_text for cell in built.cells if cell.is_row_header] == ["DDPM"]
+
     def test_simple_table_with_caption(self) -> None:
         texts = [text_item(0, label="caption", text="Table 1: Metrics")]
         grid = [
@@ -349,6 +429,27 @@ class TestTableConversion:
         assert len(group_cells) == 1
         assert group_cells[0].column_span == 2
         assert len(built.cells) == 3
+
+    def test_serialized_merged_cell_copies_are_deduplicated(self) -> None:
+        # model_dump/json serialization destroys object identity while keeping
+        # the same logical merged-cell coordinates in every covered slot.
+        merged = grid_cell("Group", 0, 0, column_header=True, row_end=3)
+        grid = [
+            [dict(merged), grid_cell("A", 0, 1, column_header=True)],
+            [dict(merged), grid_cell("1", 1, 1)],
+            [dict(merged), grid_cell("2", 2, 1)],
+        ]
+
+        built, warnings, _spans = build_table_from_docling(table_item(0, grid), {}, {})
+
+        assert warnings == []
+        assert built is not None
+        group_cells = [cell for cell in built.cells if cell.normalized_text == "Group"]
+        assert len(group_cells) == 1
+        assert group_cells[0].row_span == 3
+        assert not validate_document_ir(
+            build(payload(tables=[table_item(0, grid)], body_refs=["#/tables/0"]))
+        ).issues
 
     def test_cell_provenance_bbox_present(self) -> None:
         grid = [[grid_cell("H", 0, 0, column_header=True)], [grid_cell("v", 1, 0)]]
@@ -478,13 +579,17 @@ class TestManifestAndHelpers:
             "ocr": False,
             "table_structure": True,
             "formula_enrichment": True,
+            "pymupdf_table_fallback": True,
             "device": "cpu",
         }
         assert parser._model_ids == {
             "layout": "docling-project/docling-layout-heron",
             "table": "docling-project/TableFormer",
+            "table_fallback": "pymupdf/find_tables",
         }
-        assert parser._model_revisions == {"layout": "abc123", "table": ""}
+        assert parser._model_revisions["layout"] == "abc123"
+        assert parser._model_revisions["table"] == ""
+        assert parser._model_revisions["table_fallback"]
 
     def test_manifest_uses_override_version_without_docling(self) -> None:
         pinned = DoclingParser(parser_version="2.121.0", model_ids={"layout": "m"})

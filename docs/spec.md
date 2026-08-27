@@ -463,7 +463,7 @@ Content:
 
 `LLMProvider` 必须提供异步 `generate()` 和 `stream()`，业务代码只依赖统一 message、timeout、usage 和 finish reason 模型。
 
-回答 prompt 必须要求：仅依据 Sources；区分来源事实与推断；证据不足时说明；每个可验证结论就近引用 `[1]`；不得生成不存在的 source 编号。服务端在完成后解析引用并校验：
+回答 prompt 必须要求：仅依据 Sources；区分来源事实与推断；来源只有在实体、方法、数据集、指标和比较关系上直接支持问题时才视为相关；证据不足时以稳定短语 `Insufficient evidence in the provided sources.` 开头且不引用；每个可验证结论就近引用 `[1]`；不得生成不存在的 source 编号。最终生成必须携带最近会话历史，不能只在 query rewrite 阶段使用历史。服务端在完成后解析引用并校验：
 
 - 引用编号必须存在；
 - 每个编号映射至少一个唯一 `chunk_id`；

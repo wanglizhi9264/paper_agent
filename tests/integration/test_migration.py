@@ -110,8 +110,25 @@ def test_pdf_v2_migration_upgrade_downgrade_upgrade(isolated_db_url: str) -> Non
         finally:
             await engine.dispose()
 
+    async def _failed_at_is_timezone_aware() -> bool:
+        engine = create_async_engine(isolated_db_url)
+        try:
+            async with engine.connect() as conn:
+                return await conn.run_sync(
+                    lambda connection: bool(
+                        next(
+                            column["type"]
+                            for column in inspect(connection).get_columns("document_versions")
+                            if column["name"] == "failed_at"
+                        ).timezone
+                    )
+                )
+        finally:
+            await engine.dispose()
+
     _alembic(isolated_db_url, "upgrade", "head")
     assert expected.issubset(asyncio.run(_columns()))
+    assert asyncio.run(_failed_at_is_timezone_aware())
     _alembic(isolated_db_url, "downgrade", "0001_initial")
     assert expected.isdisjoint(asyncio.run(_columns()))
     _alembic(isolated_db_url, "upgrade", "head")

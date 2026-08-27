@@ -53,7 +53,9 @@ def test_docling_real_parse_public_fixture() -> None:
     table = tables[0].table
     assert table is not None
     assert (table.row_count, table.column_count) == (3, 3)
-    header_texts = [cell.normalized_text for cell in table.cells if cell.is_column_header]
+    header_texts = [
+        cell.normalized_text.casefold() for cell in table.cells if cell.is_column_header
+    ]
     assert header_texts[:3] == ["model", "is", "fid"]
 
     from app.document_ir.validate import validate_document_ir

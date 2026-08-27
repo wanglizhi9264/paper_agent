@@ -159,9 +159,7 @@ async def reconcile_v2_builds(session: AsyncSession, artifact_manager: object) -
     snapshots = list(
         (
             await session.execute(
-                select(IndexSnapshot).where(
-                    IndexSnapshot.status == IndexSnapshotStatus.BUILDING
-                )
+                select(IndexSnapshot).where(IndexSnapshot.status == IndexSnapshotStatus.BUILDING)
             )
         )
         .scalars()
@@ -175,19 +173,13 @@ async def reconcile_v2_builds(session: AsyncSession, artifact_manager: object) -
             fail(version.id, version.id)
     for snapshot in snapshots:
         snapshot.status = IndexSnapshotStatus.FAILED
-    known_versions = set(
-        (
-            await session.execute(select(DocumentVersion.id))
-        ).scalars().all()
-    )
+    known_versions = set((await session.execute(select(DocumentVersion.id))).scalars().all())
     quarantine = getattr(artifact_manager, "quarantine_orphans", None)
     if callable(quarantine):
         quarantine(known_versions)
     if versions or snapshots:
         await session.flush()
-        logger.warning(
-            "reconciled_v2_builds", versions=len(versions), snapshots=len(snapshots)
-        )
+        logger.warning("reconciled_v2_builds", versions=len(versions), snapshots=len(snapshots))
     return len(versions), len(snapshots)
 
 

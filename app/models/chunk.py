@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
+    DateTime,
     ForeignKey,
     Index,
     Integer,
@@ -65,7 +66,7 @@ class DocumentVersion(Base, TimestampMixin):
     chunk_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     character_count: Mapped[int | None] = mapped_column(nullable=True)
     stats: Mapped[dict[str, Any] | None] = mapped_column(jsonb(), nullable=True)
-    failed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     chunks: Mapped[list[Chunk]] = relationship(
         back_populates="document_version",

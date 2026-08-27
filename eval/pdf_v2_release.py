@@ -13,9 +13,10 @@ import json
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from app.cli.pdf_v2_gate import evaluate_gate as evaluate_hard_case_gate
 
@@ -75,9 +76,7 @@ def validate_resolved_dataset(payload: object) -> DatasetSummary:
     if len(items) != 60:
         raise ReleaseGateError("DATASET_COUNT", f"expected 60 questions, got {len(items)}")
     ids = [item.get("id") for item in items]
-    if any(not isinstance(case_id, str) or not case_id for case_id in ids) or len(
-        set(ids)
-    ) != 60:
+    if any(not isinstance(case_id, str) or not case_id for case_id in ids) or len(set(ids)) != 60:
         raise ReleaseGateError("DATASET_IDS", "question IDs must be non-empty and unique")
     if any(type(item.get("answerable")) is not bool for item in items):
         raise ReleaseGateError(
@@ -194,17 +193,12 @@ def evaluate_predictions(dataset: object, predictions: object) -> dict[str, obje
         latencies.append(float(prediction.get("latency_ms") or 0.0))
         if item["answerable"]:
             relevant = set(_relevant_ids(item))
-            retrieved = {
-                str(value) for value in (prediction.get("retrieved_chunk_ids") or [])[:10]
-            }
+            retrieved = {str(value) for value in (prediction.get("retrieved_chunk_ids") or [])[:10]}
             recall = _ratio(len(relevant & retrieved), len(relevant))
             recall_values.append(recall)
             split_hits[str(item["split"])].append(recall)
             required = set(_required_citations(item))
-            cited = {
-                str(value)
-                for value in prediction.get("predicted_citation_chunk_ids") or []
-            }
+            cited = {str(value) for value in prediction.get("predicted_citation_chunk_ids") or []}
             citation_hits += len(required & cited)
             citation_predicted += len(cited)
             citation_required += len(required)
@@ -352,23 +346,33 @@ class LiveAPIAdapter:
 
     def predict(self, item: dict[str, Any]) -> dict[str, Any]:
         started = time.perf_counter()
-        scope = item["scope"]
-        search = self._client.post(
-            "/api/v1/search", json={"query": item["question"], "scope": scope, "top_k": 10}
-        )
-        search.raise_for_status()
-        retrieved = [value["chunk_id"] for value in search.json()["results"]]
+        scope = item.get("runtime_scope", item["scope"])
         created = self._client.post(
             "/api/v1/sessions", json={"title": f"eval:{item['id']}", "scope": scope}
         )
         created.raise_for_status()
         session_id = created.json()["id"]
         try:
+            for message in item.get("conversation") or []:
+                if message.get("role") != "user":
+                    continue
+                history = self._client.post(
+                    "/api/v1/chat",
+                    json={"session_id": session_id, "query": message["content"]},
+                )
+                history.raise_for_status()
             chat = self._client.post(
                 "/api/v1/chat", json={"session_id": session_id, "query": item["question"]}
             )
             chat.raise_for_status()
             body = chat.json()
+            rewritten_query = body.get("rewritten_query") or item["question"]
+            search = self._client.post(
+                "/api/v1/search",
+                json={"query": rewritten_query, "scope": scope, "top_k": 10},
+            )
+            search.raise_for_status()
+            retrieved = [value["chunk_id"] for value in search.json()["results"]]
         finally:
             self._client.delete(f"/api/v1/sessions/{session_id}")
         cited = [value["chunk_id"] for value in body.get("citations", [])]

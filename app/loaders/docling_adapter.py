@@ -16,6 +16,7 @@ warnings and are counted malformed.
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -43,7 +44,8 @@ from app.document_ir.models import (
 )
 from app.document_ir.normalize import NormalizeResult, normalize_for_retrieval
 from app.document_ir.serialize import compute_parser_signature
-from app.loaders.pymupdf_adapter import count_orphan_numeric_cells
+from app.loaders.base import normalize_text
+from app.loaders.pymupdf_adapter import PyMuPDFParser, count_orphan_numeric_cells
 
 # Reading-order confidence starts at full trust in Docling's own order; every
 # dangling/unresolvable reference found during the body walk costs 0.02
@@ -124,7 +126,19 @@ def load_docling_payload(
         }
     )
     try:
-        result = converter.convert(str(path))
+        with warnings.catch_warnings():
+            # Docling 2.121.0 still reads this deprecated Pydantic field while
+            # initializing StandardPdfPipeline. Suppress only that exact
+            # upstream notice; all other project warnings remain errors.
+            warnings.filterwarnings(
+                "ignore",
+                message=(
+                    "This field is deprecated. Use `generate_page_images=True` "
+                    "and call `TableItem.get_image\\(\\)`.*"
+                ),
+                category=DeprecationWarning,
+            )
+            result = converter.convert(str(path))
     except MemoryError as exc:
         raise ParseError(f"docling ran out of memory: {exc}", code=PDF_PARSER_OOM) from exc
     except Exception as exc:
@@ -246,7 +260,7 @@ def _resolve_caption_text(
         target = index.get(ref_str)
         if target is None:
             continue
-        candidate = str(target.get("text", "")).strip()
+        candidate = normalize_text(str(target.get("text", ""))).strip()
         if candidate:
             return candidate
     return None
@@ -280,6 +294,7 @@ def build_table_from_docling(
 
     header_rows = _table_header_rows(grid)
     seen_objects: set[int] = set()
+    seen_cell_signatures: set[tuple[int, int, int, int, str, bool, bool]] = set()
     cells: list[TableCell] = []
     table_spans = _provenance_spans(table_item, pages)
     page_for_cells = table_spans[0].physical_page if table_spans else 1
@@ -303,7 +318,24 @@ def build_table_from_docling(
                 raw_cell.get("col_span")
                 or max(int(raw_cell.get("end_col_offset_idx", start_col)) - start_col, 1)
             )
-            text_value = str(raw_cell.get("text", ""))
+            text_value = normalize_text(str(raw_cell.get("text", "")))
+            # Docling's in-memory grid can repeat the same object for every
+            # coordinate covered by a merged cell.  After model_dump/json
+            # serialization those entries become distinct dict objects, so
+            # object identity alone no longer prevents duplicate logical
+            # cells and the canonical IR validator reports TABLE_OVERLAP.
+            cell_signature = (
+                start_row,
+                start_col,
+                max(row_span, 1),
+                max(col_span, 1),
+                text_value,
+                bool(raw_cell.get("column_header")),
+                bool(raw_cell.get("row_header")),
+            )
+            if cell_signature in seen_cell_signatures:
+                continue
+            seen_cell_signatures.add(cell_signature)
             normalized_result: NormalizeResult = normalize_for_retrieval(
                 text_value, allow_empty=True
             )
@@ -320,8 +352,17 @@ def build_table_from_docling(
                     column_span=max(col_span, 1),
                     raw_text=text_value,
                     normalized_text=normalized_result.text,
-                    is_column_header=bool(raw_cell.get("column_header")),
-                    is_row_header=bool(raw_cell.get("row_header")),
+                    # Real Docling output can leave every header flag false
+                    # even though its leading-row fallback identifies row 0
+                    # as the table header. Keep explicit flags when present,
+                    # otherwise bind the inferred header rows/label column.
+                    is_column_header=(
+                        bool(raw_cell.get("column_header")) or start_row in header_rows
+                    ),
+                    is_row_header=(
+                        bool(raw_cell.get("row_header"))
+                        or (start_col == 0 and start_row not in header_rows)
+                    ),
                     provenance=cell_provenance,
                 )
             )
@@ -418,7 +459,7 @@ def build_document_ir_from_docling(
         label = str(item.get("label", ""))
         layer = str(item.get("content_layer", "body"))
         kind = _map_kind(label, layer, collection)
-        raw_text = str(item.get("orig", item.get("text", "")))
+        raw_text = normalize_text(str(item.get("orig", item.get("text", ""))))
         normalized_result = normalize_for_retrieval(raw_text, allow_empty=True)
         broken_unicode_total += register_text_stats(raw_text, normalized_result)
         replacement_total += normalized_result.replacement_char_count
@@ -522,12 +563,75 @@ def build_document_ir_from_docling(
 
     return DocumentIR(
         document_id=document_id,
-        title=title,
+        title=normalize_text(title),
         parser=manifest,
         pages=sorted(pages_by_number.values(), key=lambda p: p.physical_page),
         elements=elements,
         quality=quality,
         metadata={"layout_parser": "docling"},
+    )
+
+
+def merge_pymupdf_table_fallback(primary: DocumentIR, fallback: DocumentIR) -> DocumentIR:
+    """Add verified PyMuPDF tables only on pages where Docling found none.
+
+    This conservative page-level rule avoids duplicate/conflicting table
+    structures while recovering borderless paper tables that Docling emitted
+    only as captions.  The resulting document keeps the Docling manifest; the
+    fallback implementation/version are part of that manifest's signature.
+    """
+    primary_table_pages = {
+        span.physical_page
+        for element in primary.elements
+        if element.kind == "table"
+        for span in element.provenance
+    }
+    additions: list[DocumentElement] = []
+    for element in fallback.elements:
+        pages = {span.physical_page for span in element.provenance}
+        if element.kind != "table" or not pages or pages & primary_table_pages:
+            continue
+        additions.append(
+            element.model_copy(
+                update={
+                    "metadata": {**element.metadata, "table_fallback": "pymupdf"},
+                }
+            )
+        )
+    if not additions:
+        return primary
+
+    def order_key(element: DocumentElement) -> tuple[int, float, int]:
+        pages = [span.physical_page for span in element.provenance]
+        boxes = [span.bbox for span in element.provenance if span.bbox is not None]
+        return (
+            min(pages, default=2**31 - 1),
+            min((box.y0 for box in boxes), default=float("inf")),
+            element.reading_order,
+        )
+
+    ordered = sorted([*primary.elements, *additions], key=order_key)
+    elements = [
+        element.model_copy(update={"reading_order": index}) for index, element in enumerate(ordered)
+    ]
+    tables = [element.table for element in elements if element.table is not None]
+    orphan_count, numeric_total = count_orphan_numeric_cells(tables)
+    quality = primary.quality.model_copy(
+        update={
+            "table_count": len(tables),
+            "orphan_numeric_ratio": orphan_count / numeric_total if numeric_total else 0.0,
+            "warnings": [
+                *primary.quality.warnings,
+                f"pymupdf table fallback added {len(additions)} table(s)",
+            ],
+        }
+    )
+    return primary.model_copy(
+        update={
+            "elements": elements,
+            "quality": quality,
+            "metadata": {**primary.metadata, "pymupdf_table_fallback_count": len(additions)},
+        }
     )
 
 
@@ -544,21 +648,32 @@ class DoclingParser:
         ocr: bool = False,
         table_structure: bool = True,
         formula_enrichment: bool = True,
+        pymupdf_table_fallback: bool = True,
         device: str = "cpu",
         artifacts_path: str = "",
     ) -> None:
         self._override_version = parser_version
-        self._model_ids = model_ids or {}
-        self._model_revisions = model_revisions or {}
-        self._options = options or {
-            "ocr": ocr,
-            "table_structure": table_structure,
-            "formula_enrichment": formula_enrichment,
-            "device": device,
-        }
+        self._model_ids = dict(model_ids or {})
+        self._model_revisions = dict(model_revisions or {})
+        self._options: dict[str, bool | int | float | str]
+        if options is not None:
+            self._options = dict(options)
+        else:
+            self._options = {
+                "ocr": ocr,
+                "table_structure": table_structure,
+                "formula_enrichment": formula_enrichment,
+                "device": device,
+            }
+        self._options.setdefault("pymupdf_table_fallback", pymupdf_table_fallback)
+        if pymupdf_table_fallback:
+            pymupdf_version = PyMuPDFParser().manifest.parser_version
+            self._model_ids.setdefault("table_fallback", "pymupdf/find_tables")
+            self._model_revisions.setdefault("table_fallback", pymupdf_version)
         self._ocr = ocr
         self._table_structure = table_structure
         self._formula_enrichment = formula_enrichment
+        self._pymupdf_table_fallback = pymupdf_table_fallback
         self._device = device
         self._artifacts_path = artifacts_path
         self._manifest: ParserManifest | None = None
@@ -569,6 +684,7 @@ class DoclingParser:
             ocr=bool(getattr(settings, "docling_ocr", False)),
             table_structure=bool(getattr(settings, "docling_table_structure", True)),
             formula_enrichment=bool(getattr(settings, "docling_formula_enrichment", True)),
+            pymupdf_table_fallback=bool(getattr(settings, "docling_pymupdf_table_fallback", True)),
             device=str(getattr(settings, "docling_device", "cpu")),
             artifacts_path=str(getattr(settings, "docling_artifacts_path", "")),
             model_ids={
@@ -612,12 +728,27 @@ class DoclingParser:
         )
         check_docling_content(payload)
         resolved_title = title or _derive_title(payload) or path.stem
-        return build_document_ir_from_docling(
+        ir = build_document_ir_from_docling(
             payload,
             document_id=document_id,
             title=resolved_title,
             manifest=self.manifest,
         )
+        if not self._pymupdf_table_fallback:
+            return ir
+        try:
+            fallback = PyMuPDFParser().parse(path, document_id=document_id, title=resolved_title)
+        except ParseError as exc:
+            quality = ir.quality.model_copy(
+                update={
+                    "warnings": [
+                        *ir.quality.warnings,
+                        f"pymupdf table fallback unavailable: {exc.code}",
+                    ]
+                }
+            )
+            return ir.model_copy(update={"quality": quality})
+        return merge_pymupdf_table_fallback(ir, fallback)
 
 
 def _installed_docling_version() -> str:

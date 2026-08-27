@@ -35,11 +35,10 @@ node_modules/
 *.key
 
 # Storage / runtime artifacts (never commit)
-storage/uploads/
-storage/indexes/
-storage/tmp/
-storage/*.sqlite
-storage/*.db
+storage/
+
+# Local model repository checkouts
+PDF-Extract-Kit-1.0/
 
 # Model weights / indexes / snapshots
 *.bin

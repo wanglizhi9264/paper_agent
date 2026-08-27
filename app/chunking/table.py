@@ -56,9 +56,7 @@ def _header_path(table: TableData, column: int) -> list[str]:
 
 
 def _row_cells(table: TableData, row: int) -> list[TableCell]:
-    return sorted(
-        [cell for cell in table.cells if cell.row == row], key=lambda cell: cell.column
-    )
+    return sorted([cell for cell in table.cells if cell.row == row], key=lambda cell: cell.column)
 
 
 def _row_headers(cells: list[TableCell]) -> list[TableCell]:
@@ -68,9 +66,7 @@ def _row_headers(cells: list[TableCell]) -> list[TableCell]:
     return [cells[0]] if cells else []
 
 
-def _row_markdown(
-    row_label: str, values: list[tuple[list[str], TableCell]]
-) -> str:
+def _row_markdown(row_label: str, values: list[tuple[list[str], TableCell]]) -> str:
     headers = ["Row", *[" > ".join(path) for path, _cell in values]]
     row = [row_label, *[cell.raw_text.strip() for _path, cell in values]]
     return (
@@ -98,9 +94,7 @@ def _retrieval_text(
         f"Table: {table_label}",
         f"Row: {row_label}",
     ]
-    lines.extend(
-        f"{' > '.join(path)}: {cell.normalized_text.strip()}" for path, cell in values
-    )
+    lines.extend(f"{' > '.join(path)}: {cell.normalized_text.strip()}" for path, cell in values)
     return "\n".join(lines)
 
 
@@ -165,11 +159,43 @@ def chunk_table_element(
         character_count=len(parent_raw),
         page_start=min(parent_pages, default=None),
         page_end=max(parent_pages, default=None),
-        metadata=_base_metadata(
-            element, subtype="table_parent", fingerprint=fingerprint, cells=[]
-        ),
+        metadata=_base_metadata(element, subtype="table_parent", fingerprint=fingerprint, cells=[]),
     )
     results = [parent]
+
+    raw_table_text = element.metadata.get("raw_table_text")
+    if isinstance(raw_table_text, str) and raw_table_text.strip():
+        raw_alias = raw_table_text.strip()
+        raw_retrieval = "\n".join(
+            [
+                f"Document: {document_title}",
+                f"Section: {' > '.join(element.section_path)}",
+                f"Table: {table_label}",
+                raw_alias,
+            ]
+        )
+        raw_metadata = _base_metadata(
+            element,
+            subtype="table_raw_text",
+            fingerprint=fingerprint,
+            cells=[],
+        )
+        raw_metadata["parent_chunk_index"] = parent.chunk_index
+        results.append(
+            ChunkResult(
+                chunk_index=start_index + len(results),
+                kind="table",
+                section_path=list(element.section_path),
+                raw_content=raw_alias,
+                retrieval_content=raw_retrieval[: config.retrieval_content_max_chars],
+                content_hash=_hash(raw_alias),
+                character_count=len(raw_alias),
+                page_start=min(parent_pages, default=None),
+                page_end=max(parent_pages, default=None),
+                parent_chunk_index=parent.chunk_index,
+                metadata=raw_metadata,
+            )
+        )
 
     for row_index in range(table.row_count):
         if row_index in table.header_rows:
@@ -179,9 +205,14 @@ def chunk_table_element(
             continue
         row_header_cells = _row_headers(cells)
         row_header_ids = {cell.id for cell in row_header_cells}
-        row_label = " > ".join(
-            cell.normalized_text.strip() for cell in row_header_cells if cell.normalized_text.strip()
-        ) or f"row_{row_index}"
+        row_label = (
+            " > ".join(
+                cell.normalized_text.strip()
+                for cell in row_header_cells
+                if cell.normalized_text.strip()
+            )
+            or f"row_{row_index}"
+        )
         values = [
             (_header_path(table, cell.column), cell)
             for cell in cells
@@ -207,9 +238,7 @@ def chunk_table_element(
             {
                 "parent_chunk_index": parent.chunk_index,
                 "row_indices": [row_index],
-                "row_header_path": [
-                    cell.normalized_text.strip() for cell in row_header_cells
-                ],
+                "row_header_path": [cell.normalized_text.strip() for cell in row_header_cells],
                 "column_header_paths": [path for path, _cell in values],
                 "overlong_row": len(retrieval) > config.max_chunk_chars,
             }
@@ -262,9 +291,7 @@ def chunk_table_element(
                 {
                     "parent_chunk_index": parent.chunk_index,
                     "row_indices": [row_index],
-                    "row_header_path": [
-                        cell.normalized_text.strip() for cell in row_header_cells
-                    ],
+                    "row_header_path": [cell.normalized_text.strip() for cell in row_header_cells],
                     "column_header_paths": [path for path, _cell in group_values],
                     "header_group": group_name,
                 }

@@ -26,6 +26,7 @@ from app.document_ir.models import (
     BoundingBox,
     DocumentElement,
     DocumentIR,
+    ElementKind,
     LayoutQualityReport,
     PageIR,
     ParserManifest,
@@ -115,7 +116,7 @@ def _table_rows(body: str) -> list[list[tuple[str, bool, int, int]]]:
 
 
 def _bbox(raw: object, *, width: float, height: float) -> BoundingBox | None:
-    if not isinstance(raw, (list, tuple)) or len(raw) != 4:
+    if not isinstance(raw, list | tuple) or len(raw) != 4:
         return None
     try:
         x0, y0, x1, y1 = (float(value) for value in raw)
@@ -132,7 +133,13 @@ def _bbox(raw: object, *, width: float, height: float) -> BoundingBox | None:
     return BoundingBox(x0=x0, y0=y0, x1=x1, y1=y1)
 
 
-def _cell_bbox(table_bbox: BoundingBox | None, row: int, column: int, rows: int, cols: int) -> BoundingBox | None:
+def _cell_bbox(
+    table_bbox: BoundingBox | None,
+    row: int,
+    column: int,
+    rows: int,
+    cols: int,
+) -> BoundingBox | None:
     if table_bbox is None:
         return None
     cell_width = (table_bbox.x1 - table_bbox.x0) / cols
@@ -153,13 +160,39 @@ def _payload_parts(payload: object) -> tuple[list[dict[str, object]], list[dict[
         raise ParseError("MinerU output is not a JSON object/list", code=PDF_PARSE_FAILED)
     pages_raw = payload.get("pages", [])
     elements_raw = payload.get("elements", payload.get("content_list", []))
-    pages = [item for item in pages_raw if isinstance(item, dict)] if isinstance(pages_raw, list) else []
+    pages = (
+        [item for item in pages_raw if isinstance(item, dict)]
+        if isinstance(pages_raw, list)
+        else []
+    )
     elements = (
         [item for item in elements_raw if isinstance(item, dict)]
         if isinstance(elements_raw, list)
         else []
     )
     return pages, elements
+
+
+def _as_int(value: object, default: int = 0) -> int:
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int | float | str):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+    return default
+
+
+def _as_float(value: object, default: float) -> float:
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int | float | str):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+    return default
 
 
 def convert_mineru_payload(
@@ -173,16 +206,22 @@ def convert_mineru_payload(
     """Convert deterministic MinerU content-list JSON to Canonical IR."""
     pages_raw, items = _payload_parts(payload)
     page_dimensions: dict[int, tuple[float, float]] = {}
-    for page in pages_raw:
-        index = int(page.get("page_idx", page.get("page", 0)))
-        page_dimensions[index] = (float(page.get("width", 612.0)), float(page.get("height", 792.0)))
+    for page_data in pages_raw:
+        index = _as_int(page_data.get("page_idx", page_data.get("page", 0)))
+        page_dimensions[index] = (
+            _as_float(page_data.get("width"), 612.0),
+            _as_float(page_data.get("height"), 792.0),
+        )
     for item in items:
-        index = int(item.get("page_idx", item.get("page", 0)))
+        index = _as_int(item.get("page_idx", item.get("page", 0)))
         size = item.get("page_size")
-        if index not in page_dimensions and isinstance(size, (list, tuple)) and len(size) == 2:
-            page_dimensions[index] = (float(size[0]), float(size[1]))
+        if index not in page_dimensions and isinstance(size, list | tuple) and len(size) == 2:
+            page_dimensions[index] = (
+                _as_float(size[0], 612.0),
+                _as_float(size[1], 792.0),
+            )
     if not page_dimensions:
-        max_page = max((int(item.get("page_idx", 0)) for item in items), default=0)
+        max_page = max((_as_int(item.get("page_idx")) for item in items), default=0)
         page_dimensions = {index: (612.0, 792.0) for index in range(max_page + 1)}
 
     manifest = ParserManifest(
@@ -211,12 +250,12 @@ def convert_mineru_payload(
     replacement_count = 0
 
     for item in items:
-        page_index = int(item.get("page_idx", item.get("page", 0)))
+        page_index = _as_int(item.get("page_idx", item.get("page", 0)))
         physical_page = page_index + 1
-        page = page_map.get(physical_page)
-        if page is None:
+        page_ir = page_map.get(physical_page)
+        if page_ir is None:
             continue
-        width, height = page.width, page.height
+        width, height = page_ir.width, page_ir.height
         source = SourceSpan(
             physical_page=physical_page,
             bbox=_bbox(item.get("bbox"), width=width, height=height),
@@ -229,7 +268,7 @@ def convert_mineru_payload(
         if item_type in {"title", "heading"} or is_heading:
             normalized = normalize_for_retrieval(raw_text)
             replacement_count += normalized.replacement_char_count
-            resolved_level = int(level) if is_heading else 1
+            resolved_level = _as_int(level, 1) if is_heading else 1
             section_path = section_path[: max(0, resolved_level - 1)]
             element = DocumentElement(
                 kind="title" if item_type == "title" else "heading",
@@ -272,7 +311,9 @@ def convert_mineru_payload(
                             provenance=[
                                 SourceSpan(
                                     physical_page=physical_page,
-                                    bbox=_cell_bbox(table_box, row_index, column, len(rows), max(1, len(row))),
+                                    bbox=_cell_bbox(
+                                        table_box, row_index, column, len(rows), max(1, len(row))
+                                    ),
                                     parser_element_id=source.parser_element_id,
                                 )
                             ],
@@ -285,13 +326,16 @@ def convert_mineru_payload(
                     max_column = max(max_column, column)
             header_rows = sorted({cell.row for cell in cells if cell.is_column_header})
             caption_value = item.get("table_caption", item.get("caption"))
+            caption: str | None
             if isinstance(caption_value, list):
                 caption = " ".join(str(value) for value in caption_value if value)
             else:
                 caption = str(caption_value) if caption_value else None
             table = make_table_data(
                 cells,
-                row_count=max(len(rows), max((cell.row + cell.row_span for cell in cells), default=1)),
+                row_count=max(
+                    len(rows), max((cell.row + cell.row_span for cell in cells), default=1)
+                ),
                 column_count=max_column,
                 header_rows=header_rows,
                 caption=caption,
@@ -312,7 +356,11 @@ def convert_mineru_payload(
                 continue
             normalized = normalize_for_retrieval(raw_text)
             replacement_count += normalized.replacement_char_count
-            kind = "formula" if item_type in {"equation", "formula", "interline_equation"} else "paragraph"
+            kind: ElementKind = (
+                "formula"
+                if item_type in {"equation", "formula", "interline_equation"}
+                else "paragraph"
+            )
             element = DocumentElement(
                 kind=kind,
                 reading_order=len(elements),
@@ -323,7 +371,7 @@ def convert_mineru_payload(
                 metadata={"mineru_type": item_type},
             )
         elements.append(element)
-        page.element_ids.append(element.id)
+        page_ir.element_ids.append(element.id)
 
     hard_failures = [] if elements else ["no readable content extracted"]
     tables = [element.table for element in elements if element.table is not None]
@@ -376,7 +424,7 @@ class MinerUParser:
     @classmethod
     def from_settings(cls, settings: Any) -> MinerUParser:
         return cls(
-            storage_dir=Path(getattr(settings, "storage_dir")),
+            storage_dir=Path(settings.storage_dir),
             command=str(getattr(settings, "mineru_command", "mineru")),
             backend=str(getattr(settings, "mineru_backend", "pipeline")),
             timeout_seconds=int(getattr(settings, "mineru_timeout_seconds", 900)),
@@ -418,8 +466,12 @@ class MinerUParser:
         output_dir = (self._storage_dir / "tmp" / "mineru" / str(document_id)).resolve()
         allowed_tmp = (self._storage_dir / "tmp").resolve()
         if not output_dir.is_relative_to(allowed_tmp) or output_dir.exists():
-            raise ParseError("MinerU output directory is unsafe or already exists", code=PDF_PARSE_FAILED)
-        output_dir.mkdir(parents=True)
+            raise ParseError(
+                "MinerU output directory is unsafe or already exists", code=PDF_PARSE_FAILED
+            )
+        # MinerU owns creation of its -o directory. Create only the trusted
+        # parent so a CLI cannot accidentally merge into a stale job result.
+        output_dir.parent.mkdir(parents=True, exist_ok=True)
         argv = build_mineru_argv(
             command=self._command,
             input_path=resolved_input,
@@ -438,7 +490,9 @@ class MinerUParser:
         except subprocess.TimeoutExpired as exc:
             raise ParseError("MinerU parser timed out", code=PDF_PARSE_FAILED) from exc
         except OSError as exc:
-            raise ParseError("MinerU executable is unavailable", code=PDF_PARSER_UNAVAILABLE) from exc
+            raise ParseError(
+                "MinerU executable is unavailable", code=PDF_PARSER_UNAVAILABLE
+            ) from exc
         if result.returncode != 0:
             raise ParseError(
                 f"MinerU parser exited with status {result.returncode}", code=PDF_PARSE_FAILED
@@ -463,7 +517,9 @@ class MinerUParser:
         )
         validation = validate_document_ir(ir)
         if validation.issues:
-            raise ParseError("MinerU output failed Canonical IR validation", code=PDF_LAYOUT_INVALID)
+            raise ParseError(
+                "MinerU output failed Canonical IR validation", code=PDF_LAYOUT_INVALID
+            )
         return ir
 
 

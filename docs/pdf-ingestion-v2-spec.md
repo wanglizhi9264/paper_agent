@@ -450,6 +450,14 @@ Docling adapter 必须：
 - 固定 Docling 下载模型的 ID/revision；
 - 默认 `do_ocr=false`；
 - 默认 `do_table_structure=true`；
+- 默认 `PAPER_RAG_DOCLING_PYMUPDF_TABLE_FALLBACK=true`：仅在 Docling
+  未为某物理页产出 table element 时，合并 PyMuPDF `find_tables()` 的已验证结构；
+- PyMuPDF 默认 line strategy 在存在 Table caption 但未检出表格时，允许使用
+  `strategy="text"` 恢复无边框论文表格；该策略、PyMuPDF 版本和启用开关必须进入
+  Docling parser signature；
+- fallback 不得伪造 cell。检测器遗漏的合并行可按等长多行 cell 做位置对齐展开，
+  原始 table bbox 排序文本须作为 `table_raw_text` 索引 chunk 保存并绑定 table parent；
+- 同一物理页已有 Docling table 时不得再合并 PyMuPDF table，避免重复/冲突结构；
 - 将 DoclingDocument 转换为 Canonical DocumentIR；
 - 不把 Docling Markdown 直接写入 Chunk；
 - parser 输出必须先通过 IR validator；
@@ -459,10 +467,10 @@ Docling adapter 必须：
 
 ```env
 PAPER_RAG_PDF_PARSER=auto
-PAPER_RAG_PDF_LAYOUT_PARSER=docling
 PAPER_RAG_DOCLING_OCR=false
 PAPER_RAG_DOCLING_TABLE_STRUCTURE=true
 PAPER_RAG_DOCLING_FORMULA_ENRICHMENT=true
+PAPER_RAG_DOCLING_PYMUPDF_TABLE_FALLBACK=true
 PAPER_RAG_DOCLING_DEVICE=cpu
 ```
 
@@ -649,6 +657,12 @@ parent metadata：
 }
 ```
 
+若 parser 还提供 table bbox 内的排序原文，必须额外生成可索引的
+`table_raw_text` child，绑定同一 parent。该 child 只代表 bbox 级保真回退，禁止伪造
+`cell_ids`；API source 的 `element_kind` 必须输出 `table_raw_text`，并保留
+`element_id`、物理页和非空 `bboxes`。它不冒充具备 cell-level binding 的
+`table_row`/`table_group`。
+
 ### 10.3 Table row chunk
 
 每个非 header 数据行至少生成一个 row chunk。`retrieval_content` 使用显式字段绑定：
@@ -709,6 +723,7 @@ ChunkResult 先使用 `parent_chunk_index`。写 ORM 时必须在同一 version 
 - paragraph chunks；
 - table row chunks；
 - table group chunks；
+- table raw-text fallback chunks；
 - formula chunks；
 - title chunks。
 
@@ -787,7 +802,9 @@ standalone query 的精确措辞可不同，但四个语义槽位必须全部存
 }
 ```
 
-兼容要求：现有字段不得删除。新增字段初期可 nullable，但 V2 table chunk 必须全部提供。
+兼容要求：现有字段不得删除。新增字段初期可 nullable；`table_row` 和 `table_group`
+必须全部提供 element/cell/page/bbox。`table_raw_text` 必须提供 element/page/bbox，且
+`cell_ids=[]`，因为它是 bbox 原文回退而不是结构化单元格，禁止为满足契约伪造 cell。
 
 前端后续可以用 bbox 做页内高亮；本任务首版只要求 API 契约和测试，不要求实现 PDF viewer。
 
@@ -867,7 +884,6 @@ storage/ir/versions/<document_version_id>/...
 # PDF Ingestion V2
 PAPER_RAG_PDF_IR_SCHEMA_VERSION=2
 PAPER_RAG_PDF_PARSER=auto
-PAPER_RAG_PDF_LAYOUT_PARSER=docling
 PAPER_RAG_PDF_NORMALIZER_VERSION=unicode-v2
 PAPER_RAG_PDF_FAST_PATH_MIN_READING_ORDER_CONFIDENCE=0.95
 PAPER_RAG_PDF_MAX_ORPHAN_NUMERIC_RATIO=0.05
@@ -877,6 +893,7 @@ PAPER_RAG_PDF_MAX_REPLACEMENT_CHARACTERS=0
 PAPER_RAG_DOCLING_OCR=false
 PAPER_RAG_DOCLING_TABLE_STRUCTURE=true
 PAPER_RAG_DOCLING_FORMULA_ENRICHMENT=true
+PAPER_RAG_DOCLING_PYMUPDF_TABLE_FALLBACK=true
 PAPER_RAG_DOCLING_DEVICE=cpu
 
 # MinerU challenger
@@ -1251,6 +1268,8 @@ Citation Precision >= 0.95
 Citation Recall >= 0.85
 Unanswerable rejection >= 0.80
 ```
+
+Live release adapter 对多轮样本必须先通过真实 `/chat` 用户轮建立 Session 历史，不得把 benchmark 的 assistant 文本注入生产会话。最终问题完成后，以响应中的 `rewritten_query` 调用 `/search` 取得 Top-10 并计算 retrieval gate；禁止用未改写追问的 stateless search 结果代替 full-pipeline Recall@10。
 
 若首次 baseline 未达到候选门，保存结果、错误分类和 parser/index manifest，状态标记为 baseline failed；不得调 frozen test 后伪称通过。
 

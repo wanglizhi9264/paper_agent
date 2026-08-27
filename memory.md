@@ -4,12 +4,17 @@
 
 ## 1. 当前状态
 
-更新时间：2026-08-25
+更新时间：2026-08-27
 
 > 2026-08-25 生产审计纠正：下列历史 Phase 3–12 条目仅表示独立模块或 fake-driven 测试曾存在，不代表生产端到端已接通。当前权威状态以本节顶部“恢复实施状态”和 `docs/spec.md` §22.1–22.2 为准。
 
 ### 恢复实施状态
 
+- 2026-08-26 本机 PDF V2 续验：Docling 2.121.0 的 layout/TableFormer 固定 revision 已完成真实 smoke；6 篇论文均以 Docling active version 重建成功（chunk 数 183/357/615/273/456/3719），旧 version/snapshot 在失败期间保持可恢复。首次正式 label resolve 从旧抽取的 14 个问题失败收敛到 9 个问题失败，即至少 51/60 能绑定 evidence，但表格 gate 尚未完成。
+- 针对剩余 9 个表格问题，已实现并确定性验证 Docling→PyMuPDF 保守 table fallback：仅补 Docling 缺表的物理页、caption 门控 text strategy、序列化 merged-cell 去重、等长 multiline row 展开、decimal fragment 拼接、table bbox 原始排序文本索引 chunk。无 DB A/B 已让 DDPM/LMM/ACTOR/Motion Intent 的目标 table anchors 全部出现在正确页；尚待 CUDA PyTorch 安装后 reindex 四篇并重新冻结 `dataset.resolved.json`，不得把 A/B 结果写成正式 60/60。
+- 当前主 `.venv` 已安装 PyTorch `2.13.0+cu130` / torchvision `0.28.0+cu130`，RTX 2060 可用；E5 与 BGE 真实 GPU smoke 均通过，单模型峰值约 546 MiB。MinerU 3.4.5 隔离环境已可执行；用户提供的 PPDocLayoutV2 完整权重已放入 ModelScope cache，pipeline 仍缺 unimernet、pp_formulanet、OCR 和 3 个 table 组件。Docling CodeFormulaV2 仍缺完整权重，当前真实链路明确使用 `formula_enrichment=false`。
+- Hybrid fallback 已在 DDPM、LMM、ACTOR、Motion Intent 四篇完成正式 CUDA reindex，6 篇保持 ready，active snapshot 为 `2d0e23b3-da8c-4631-aceb-85cf0c656167`；52/52 answerable labels 可冻结，11/11 hard-case 的精确引文、物理页、table binding 与 bbox gate 通过。
+- DeepSeek 官方 `deepseek-v4-flash` 已通过真实 chat/citation 调用。60 题 Full Pipeline 运行 60/60 无预测错误，baseline 未达发布门：Recall@10 0.367、Citation Precision 0.202、Citation Recall 0.243、Unanswerable rejection 0.25、平均延迟 13.6 秒。修复生产 chat 未使用严格 prompt/最终生成遗漏历史后，8 题定向复测拒答率提升为 1.0；多轮 Recall@10 仍为 0.25，剩余主问题是 retrieval 与 frozen chunk-label 对齐，不能宣称 release 通过。
 - 已验证可用：Docker Compose PostgreSQL 16 / Redis 7、Alembic、真实 Loader/Chunker Worker、全语料 FAISS+BM25 snapshot、documents/collections/jobs/search/sessions/chat/SSE API、前端真实 API 闭环。
 - 6 份 SHA-256 匹配的私有语料已真实重建：全部 `ready`，页数分别为 11/27/33/12/12/272，均有非零 Chunk；HTTP search 与 chat/citation 已命中真实论文内容。
 - 本机功能验收使用显式 fake embedding/reranker/LLM，以验证无网络的完整软件闭环；这不是 RTX 2060 真实模型质量或速度验收结果。
@@ -20,7 +25,8 @@
 - V2-3（Docling Adapter）的代码与确定性测试已完成：精确固定 `docling==2.121.0`（MIT），`uv.lock` 相对 V2-2 为 +924/-43 行；实现 Docling JSON → Canonical Document IR、bbox/reading order/section path/table cell provenance、Docling router、显式 model setup/revision pin CLI、PyMuPDF/Docling A/B CLI、fake conversion、CLI 和 model-smoke 测试。该阶段提交未改生产 ingestion/DB/index activation，且当时按阶段边界拒绝 MinerU（后由 V2-4 接入）。本机未执行真实 Docling 模型 smoke 和六论文 A/B，因此状态是“实现完成/环境验收待跑”，不得记为 V2-3 全验收完成。跨机器命令和硬门见 `docs/pdf-ingestion-v2-handoff.md`。
 - V2-4（MinerU Challenger）编码交付已完成：隔离 subprocess adapter 使用固定 argv、storage path 边界、单 job 输出、timeout/退出码稳定错误；content-list JSON/HTML/Markdown table 转 Canonical IR 并校验；router 与 A/B CLI 支持显式 MinerU；comparison 明确输出 improved/equivalent/regressed/pending；deterministic fake 与显式 isolated model smoke 已编写。按用户 2026-08-26 指令未安装环境，真实 MinerU 和六论文 A/B 均为 pending，不能宣称 V2-3/V2-4 环境验收通过。
 - V2-5（Table-aware Chunking）编码交付已完成：新增 parser-agnostic `chunk_document_ir` 与 table parent/row/group chunker；row/group retrieval 显式绑定 multi-level column header、row header 和 value；metadata 保存 element/cell/page/bbox/fingerprint/parent index；table parent 明确不入索引；RealChunker 预分配 UUID 后解析 parent/chapter index，悬空引用稳定失败。公开 synthetic contracts 覆盖 9 个 table hard-case 结构和 `13.61/13.09 min` 段落关系；私有 10-case gate 未运行，保持 pending。
-- V2-6（Migration 与生产激活）编码交付已完成：`0002_pdf_ingestion_v2` 与 ORM 增加 parser/IR nullable fields、index、CHECK；IR artifact manager 实现 canonical write/hash/verify/building→versions atomic rename/failure quarantine/delete/orphan recovery；PDF worker 接入 router→IR→IR chunker，非 PDF 路径不变；snapshot 目录完整 preflight 后原子移动，DB 在同一 transaction 切换 version/document/snapshot，失败恢复旧指针并标记新 build failed；worker startup reconciliation 覆盖 stale jobs/builds。PostgreSQL migration round-trip、FAISS integration 和真实 worker E2E 未运行，保持 pending。
+- V2-6（Migration 与生产激活）编码交付已完成：`0002_pdf_ingestion_v2` 与 ORM 增加 parser/IR nullable fields、index、CHECK；`0003_failed_at_tz` 修复旧 ORM 本地库的无时区列漂移；IR artifact manager 实现 canonical write/hash/verify/building→versions atomic rename/failure quarantine/delete/orphan recovery；PDF worker 接入 router→IR→IR chunker，非 PDF 路径不变；snapshot 目录完整 preflight 后原子移动，DB 在同一 transaction 切换 version/document/snapshot，失败恢复旧指针并标记新 build failed；worker startup reconciliation 覆盖 stale jobs/builds。PostgreSQL migration round-trip 与生产 Worker 启动恢复已实测通过；六论文 V2 reindex、FAISS 新 snapshot 激活和真实失败回滚仍为 pending。
+- 2026-08-26 拉取 `0928d18` 后的代码质量收口已完成：修复小数句点被误判为句末导致 `13.61/13.09` 关系断裂、MinerU 输出目录所有权冲突，并补齐 chat schema/worker/parser 类型契约。全量确定性后端测试 593 通过；PostgreSQL `0002` migration round-trip 4 通过；Ruff、format、mypy 与前端四项质量门通过。真实 Docling、MinerU 和私有 60 问 release smoke 仍按显式环境门跳过，不能据此宣称模型/私有质量验收完成。
 
 - Phase 0 已完成：仓库、Python/uv 工程、前端工程、Docker Compose、配置加载、结构化日志、request id、health/live 与 health/ready、Ruff/mypy/pytest、前端 lint/typecheck/test/build、CI 工作流。
 - Phase 1 已完成：全部 ORM 模型、共享 enums、时间戳 mixin、Alembic async 配置与初始迁移 `0001_initial`。
@@ -220,6 +226,12 @@ max_upload_bytes: 104857600
 | 2026-08-26 | Query rewrite 使用最近四条 Session 消息、Session scope 和五字段 Pydantic 输出；任意失败回退原 query 并记录 REWRITE_FAILED | 满足 eval-048 语义槽位且避免把 retrieval results 反馈进 rewrite | `app/services/query_rewrite.py`、`app/schemas/rewrite.py` |
 | 2026-08-26 | 私有 11-case gate 使用显式 evidence JSON 且 fail closed | 本机无私有论文时不能用 synthetic proxy 冒充 11/11 完成门 | `app/cli/pdf_v2_gate.py` |
 | 2026-08-26 | V2-8 release runner 对 60/52 labels、11-case、六文档/snapshot/runtime evidence 和四项指标统一 fail closed | 区分 prerequisite failure(exit 2) 与完整 baseline 未达门(exit 1)，不允许 oracle 或缺失数据产生绿色报告 | `eval/pdf_v2_release.py` |
+| 2026-08-26 | 句子切分时数字两侧的句点不作为边界；MinerU CLI 自行创建每个 job 的 `-o` 目录 | 保持小数指标语义完整，并杜绝适配器与隔离 CLI 对输出目录所有权冲突 | `app/chunking/sentence.py`、`app/loaders/mineru_adapter.py` |
+| 2026-08-26 | Docling 表格输出按逻辑坐标/内容签名去重，并在 loader 边界移除 NUL | Docling JSON 序列化会复制 merged cells；DDPM 原文本层含 NUL，二者都应在 IR validator 前规范化 | `app/loaders/docling_adapter.py`、adapter 回归测试 |
+| 2026-08-26 | Docling 仅在缺表页合并 PyMuPDF table fallback；无边框表用 caption 门控 text strategy | 私有 hard cases 实测 Docling 对 ACTOR/LMM 缺表，PyMuPDF line/text 两路互补；页级保守合并避免重复结构 | `app/loaders/docling_adapter.py`、`app/loaders/pymupdf_adapter.py` |
+| 2026-08-26 | table bbox 的排序原文作为 indexed `table_raw_text` 子 chunk，绑定同一 table parent | `Table.extract()` 在复杂 merged cells 会漏行，但 bbox text 保留 Action2Motion/DDPM 公式行；不伪造 cell，同时保证检索与 citation 可达 | `app/chunking/table.py` |
+| 2026-08-27 | Full Pipeline 的 Recall 使用 chat 返回的 rewritten query 再取 Top-10；多轮样本通过真实用户轮建立历史 | 原 runner 用未改写追问计分会把 conversational retrieval 误报成 stateless search 失败；禁止注入 benchmark assistant oracle | `eval/pdf_v2_release.py`、release 单测与 V2 spec |
+| 2026-08-27 | `/chat` 使用统一严格 system prompt 和最近历史；无直接证据时使用稳定拒答前缀且不引用 | 生产 route 之前绕过已有 prompt/message builder，真实 8 题拒答仅 2/8 | `app/api/chat.py`、`app/llm/prompts.py`、`docs/spec.md` |
 
 ## 8. 验证记录
 
@@ -252,6 +264,16 @@ max_upload_bytes: 104857600
 | 2026-08-26 | V2-6 编码静态验证 | `python -m compileall -q app tests migrations`、`git diff --check` | 通过；迁移/ORM/artifact/atomic activation/rollback/recovery tests 已编码但因按用户指令不安装环境而未执行，全部运行门 pending |
 | 2026-08-26 | V2-7 编码静态验证 | `python -m compileall -q app tests`、`git diff --check` | 通过；Ruff/pytest/mypy、11/11 私有 hard-case gate、真实 citation/rewrite E2E 因用户要求不安装环境而 pending；未生成私有 evidence 或 metrics |
 | 2026-08-26 | V2-8 编码静态验证 | `python -m compileall -q app eval tests`、`git diff --check`、纯函数 60/52/metrics sanity | 通过；依赖型测试和所有真实环境/私有数据门 pending；60 predictions/metrics 未生成，四项指标无可报告数值 |
+| 2026-08-26 | 最新代码质量收口 | `ruff check .`、`ruff format --check .`、`mypy app`、`pytest -q`；PostgreSQL migration `--run-integration`；前端 lint/typecheck/test/build | Ruff/format 通过；mypy 101 文件通过；pytest **593 通过、7 skipped**；含 0003 的 4 个 PostgreSQL 迁移测试单独全通过；前端 6 测试与 production build 通过。7 skipped 中 4 个已由独立 migration run 覆盖，其余为 Docling、MinerU、private release 显式 smoke 门。 |
+| 2026-08-26 | 本机生产启动验收 | 业务库 `alembic upgrade head/current`；后台启动 FastAPI/ARQ；`/health/live`、`/health/ready`、frontend HTTP；Worker 日志/进程 | 业务库为 `0003_failed_at_tz (head)`；API live/ready ok，PostgreSQL/Redis/active index 全 ok；前端 HTTP 200；Worker 常驻并完成 6 个历史 stale building versions 恢复。 |
+| 2026-08-26 | Docling 六论文真实 reindex | CPU Worker + fixed layout/TableFormer revisions + `formula_enrichment=false`；逐篇 job/API/active version 检查 | 6/6 ready 且 parser_version=2.121.0；chunk 数 183/357/615/273/456/3719；发现并修复 revision 环境变量、merged-cell overlap、NUL 三类真实问题。 |
+| 2026-08-26 | 私有 label resolve（Docling active snapshot） | `resolve_chunk_labels.py dataset.json` | 9 个问题仍 unresolved，至少 51/60 已绑定；失败全部集中在 DDPM/LMM/ACTOR/Motion Intent 缺失表格，不生成虚假 resolved dataset。 |
+| 2026-08-26 | Hybrid table fallback 无 DB A/B | 现有 Docling IR + 实时 PyMuPDF fallback + `chunk_document_ir` + 逐页 anchor 检查 | 9 个剩余问题涉及的 table anchors 全部恢复；正式 reindex/60 问 freeze 待 CUDA wheel 后执行。 |
+| 2026-08-26 | Hybrid fallback 代码质量门 | `ruff format --check .`、`ruff check .`、`mypy app`、`pytest -q` | format/Ruff 通过；mypy 101 files 通过；pytest **602 通过、7 skipped**。7 skipped 为 4 migration（已有独立 live PG 记录）及 3 个显式真实 smoke 门。 |
+| 2026-08-27 | CUDA 模型与 hybrid reindex | PyTorch CUDA probe、E5/BGE real smoke、4 篇 reindex、health/snapshot/label resolver、11-case gate | RTX 2060 可用；E5 768-d 与 BGE FP16 smoke 通过；4/4 reindex 成功；52/52 labels、11/11 hard cases 通过。 |
+| 2026-08-27 | 质量门与检索 baseline | Ruff/format/mypy/pytest、PostgreSQL migration integration、前端 lint/typecheck/test/build、60 题 live search | Ruff/format/mypy 通过；pytest **603 通过、7 skipped**；migration 4 通过；前端 6 测试与 build 通过；60/60 search API 成功，Recall@10 约 0.376，未达 0.85。 |
+| 2026-08-27 | DeepSeek Full Pipeline 与定向复测 | DeepSeek 官方 chat smoke；60 题 release；修复后 6 多轮 + 8 不可回答定向 live eval | smoke 成功（2 citations）；60/60 无错误但四门均未过（0.367/0.202/0.243/0.25）；严格 prompt + 生成历史修复后不可回答 **8/8**，多轮 Recall 仍 **0.25**。 |
+| 2026-08-27 | DeepSeek 修复后后端质量门 | `ruff check .`、`ruff format --check .`、`mypy app`、`pytest -q` | Ruff/format 通过；mypy 101 文件通过；pytest **605 通过、7 skipped**。7 skipped 仍为 4 个独立 PostgreSQL migration 门及 Docling/MinerU/private release 显式 smoke；本轮 private release 已由 CLI 手工真实运行。 |
 
 ## 9. 未决事项
 
@@ -263,6 +285,7 @@ max_upload_bytes: 104857600
 - 用户选择的 Generator endpoint/model 及 context limit；
 - 50+ eval 问题所用论文集合和人工标注来源。
 - V2-3 目标机器验收：Docling 模型下载体积、固定 layout/table revision SHA、public fixture real smoke、CPU/GPU 峰值、六论文/11 hard cases A/B 报告。
+- 当前 release 阻塞不是环境：DeepSeek、CUDA、数据库、索引均可运行。真实剩余项为提高跨论文/多轮检索并重新审计 frozen chunk labels（现有 label chunk 对 evidence 原文的直接覆盖并非 100%）；MinerU pipeline 剩余 6 组件和 CodeFormulaV2 完整权重仍未具备，但 Docling 主链路以 `formula_enrichment=false` 可运行。
 
 这些是 Phase 内可验证配置，不改变已批准系统结构。若实测迫使改变架构或 MVP 范围，先与用户确认并更新 spec/proposal。
 

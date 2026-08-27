@@ -80,10 +80,13 @@ async def test_pdf_v2_ingest_populates_fields_and_activates_artifacts(
     assert version is not None
     assert version.status == DocumentVersionStatus.READY
     assert version.parser_id == "pymupdf"
-    assert version.parser_signature and len(version.parser_signature) == 64
+    assert version.parser_signature
+    assert len(version.parser_signature) == 64
     assert version.ir_schema_version == 2
-    assert version.ir_path and version.ir_path.startswith("ir/versions/")
-    assert version.ir_sha256 and manager.verify(version.ir_path, version.ir_sha256)
+    assert version.ir_path
+    assert version.ir_path.startswith("ir/versions/")
+    assert version.ir_sha256
+    assert manager.verify(version.ir_path, version.ir_sha256)
 
 
 @pytest.mark.asyncio

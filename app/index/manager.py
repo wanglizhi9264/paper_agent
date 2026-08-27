@@ -168,9 +168,7 @@ async def build_corpus_snapshot(
     return snapshot
 
 
-async def activate_snapshot_record(
-    session: AsyncSession, snapshot: IndexSnapshot
-) -> None:
+async def activate_snapshot_record(session: AsyncSession, snapshot: IndexSnapshot) -> None:
     """Switch the singleton DB pointer after shadow files have been activated."""
     if snapshot.status != IndexSnapshotStatus.BUILDING:
         raise ValueError("only a building snapshot can be activated")

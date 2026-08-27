@@ -1,7 +1,7 @@
 # PDF Ingestion V2 跨机器交接与验收手册
 
-> 状态：V2-0～V2-2 已验收；V2-3 环境门仍待目标机器执行；V2-4 编码交付已完成，真实 MinerU/私有 A/B 待执行
-> 环境说明：2026-08-26 按用户指令仅完成编码，不安装模型环境；所有未执行环境门保持 pending
+> 状态：V2-0～V2-2 已验收；V2-3～V2-8 编码交付完成；PostgreSQL 迁移和 Worker 启动恢复已实测；真实 layout 模型与私有质量门待执行
+> 环境说明：2026-08-26 未安装 Docling/MinerU 模型环境；所有未执行模型/私有数据门保持 pending
 > 规范来源：[`docs/pdf-ingestion-v2-spec.md`](./pdf-ingestion-v2-spec.md)
 
 本文用于把仓库拉到另一台 Windows/Python 3.12 机器后，无歧义地完成 V2-3 的环境验收，然后把后续阶段交给其他代码代理。本文不放宽主规格的完成门。
@@ -16,8 +16,8 @@
 | V2-3 | 代码完成/环境门待跑 | Docling 2.121.0 adapter、router、setup CLI、A/B CLI、fake conversion tests、model smoke | Docling 模型下载、revision 固定、真实 fixture smoke、六论文 A/B |
 | V2-4 | 编码完成/环境门待跑 | 隔离 adapter、subprocess 安全、fake tests、显式 smoke、A/B 结论字段 | 独立 MinerU 与私有 unresolved cases A/B |
 | V2-5 | 编码完成/私有门待跑 | IR-native table parent/row/group、metadata、ORM parent mapping、synthetic hard-case contracts | 私有 10 ingestion hard cases |
-| V2-6 | 编码完成/运行门待跑 | migration 0002、ORM、IR manager、PDF worker activation、snapshot atomic switch、recovery contracts | PostgreSQL round-trip 与 production E2E |
-| V2-7～V2-8 | 未实施 | 见主规格第 19 节 | 按阶段完成门实施 |
+| V2-6 | 数据库/启动恢复已验证，V2 reindex E2E 待跑 | migrations 0002/0003、ORM、IR manager、PDF worker activation、snapshot atomic switch、recovery contracts | 六论文 V2 reindex、FAISS 激活与失败回滚实测 |
+| V2-7～V2-8 | 编码完成/私有门待跑 | table retrieval、query rewrite、citation provenance、11-case gate、60-question release runner | 私有 hard cases 与完整 release metrics |
 
 禁止在 V2-3 真实 smoke 和 A/B 失败时宣布 V2-3 验收完成，也禁止为规避失败而直接进入 V2-4。
 
@@ -51,11 +51,14 @@
 
 - `0002_pdf_ingestion_v2` 仅增加 nullable V2 列、parser signature index 和正 schema CHECK，
   downgrade 仅移除本 migration 对象；integration contract 覆盖 upgrade/downgrade/upgrade。
+- `0003_failed_at_tz` 修复旧 ORM 建库可能产生的 `failed_at` 无时区漂移；新库保持
+  timezone-aware UTC，旧本地库按 UTC 无损转换。
 - PDF worker 已从 legacy Paragraph loader 切到 router → Canonical IR → IR-native chunker；DOCX/Markdown 不变。
 - IR 先写 building 并校验 hash/schema/quality，再原子 rename 到 immutable versions 路径；delete 清理版本 artifact。
 - corpus snapshot 先完整校验并原子移动目录，随后才在同一 DB transaction 切换 snapshot/version/document pointers。
 - finalization 失败恢复旧指针和状态；worker startup 标记 stale building rows failed 并隔离 staged/orphan IR。
-- PostgreSQL migration、FAISS integration 和真实 worker E2E 因未安装环境均为 pending。
+- PostgreSQL 全迁移往返 4/4 通过；本机业务库升级至 `0003_failed_at_tz`，Worker 启动恢复成功并清理
+  6 个历史 stale building versions。六论文 V2 reindex、FAISS 新 snapshot 激活与真实失败回滚仍为 pending。
 
 ## 2. V2-3 实现契约
 

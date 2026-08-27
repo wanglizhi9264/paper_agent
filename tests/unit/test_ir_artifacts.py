@@ -23,7 +23,10 @@ def test_stage_verify_and_atomic_activate(tmp_path: Path) -> None:
     activated = manager.activate(version_id, staged.parser_signature)
     assert activated.ir_relative_path.startswith("ir/versions/")
     assert not (tmp_path / "ir" / "building" / str(version_id)).exists()
-    assert manager.verify(activated.ir_relative_path, activated.ir_sha256).document_id == ir.document_id
+    assert (
+        manager.verify(activated.ir_relative_path, activated.ir_sha256).document_id
+        == ir.document_id
+    )
 
 
 def test_tampered_artifact_is_rejected(tmp_path: Path) -> None:
@@ -41,7 +44,8 @@ def test_failed_build_moves_only_its_version_to_failed_area(tmp_path: Path) -> N
     job_id = uuid4()
     manager.stage(version_id, make_ir(elements=[make_element()]))
     failed = manager.fail(version_id, job_id)
-    assert failed is not None and failed.is_dir()
+    assert failed is not None
+    assert failed.is_dir()
     assert failed.is_relative_to(tmp_path / "tmp" / "failed")
     assert not (tmp_path / "ir" / "building" / str(version_id)).exists()
 

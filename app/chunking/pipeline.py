@@ -423,9 +423,7 @@ def _path_key(section_path: list[str]) -> str:
     return "\x00".join(section_path)
 
 
-def chunk_document_ir(
-    document: DocumentIR, config: ChunkConfig | None = None
-) -> list[ChunkResult]:
+def chunk_document_ir(document: DocumentIR, config: ChunkConfig | None = None) -> list[ChunkResult]:
     """Chunk Canonical Document IR without branching on parser identity."""
     from app.chunking.table import chunk_table_element
     from app.document_ir.normalize import formula_search_aliases
@@ -443,9 +441,7 @@ def chunk_document_ir(
                     page=element.provenance[0].physical_page,
                     metadata={"element_id": str(element.id), "element_kind": "table"},
                 )
-                _add_text_chunks(
-                    results, para, element.section_path, document.title, cfg, None
-                )
+                _add_text_chunks(results, para, element.section_path, document.title, cfg, None)
             else:
                 results.extend(
                     chunk_table_element(
@@ -478,18 +474,19 @@ def chunk_document_ir(
             ],
             "cell_ids": [],
         }
-        aliases = formula_search_aliases(element.normalized_text) if element.kind == "formula" else []
+        aliases = (
+            formula_search_aliases(element.normalized_text) if element.kind == "formula" else []
+        )
         if aliases:
             metadata["search_aliases"] = aliases
-        para_type = "code" if element.kind == "code" else "text"
         before = len(results)
         para = Paragraph(
-            type=para_type,
+            type="code" if element.kind == "code" else "text",
             content=element.raw_text,
             page=min(page_numbers, default=None),
             metadata={"page_end": max(page_numbers, default=None), **metadata},
         )
-        if para_type == "code":
+        if element.kind == "code":
             _add_code_chunk(results, para, element.section_path, document.title, cfg, None)
         else:
             _add_text_chunks(results, para, element.section_path, document.title, cfg, None)

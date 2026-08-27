@@ -72,6 +72,7 @@ class Settings(BaseSettings):
     docling_ocr: bool = False
     docling_table_structure: bool = True
     docling_formula_enrichment: bool = True
+    docling_pymupdf_table_fallback: bool = True
     docling_device: str = "cpu"
     docling_layout_model: str = "docling-project/docling-layout-heron"
     docling_table_model: str = "docling-project/TableFormer"

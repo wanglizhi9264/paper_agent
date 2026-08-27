@@ -83,9 +83,7 @@ class ChunkResult:
         """
         if self.kind == "code":
             return not self.metadata.get("code_not_add_index", False)
-        if self.kind == "table" and self.metadata.get("chunk_subtype") == "table_parent":
-            return False
-        return True
+        return not (self.kind == "table" and self.metadata.get("chunk_subtype") == "table_parent")
 
 
 DEFAULT_CHUNK_CONFIG = ChunkConfig.default()

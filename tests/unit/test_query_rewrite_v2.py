@@ -56,8 +56,10 @@ async def test_rewrite_uses_only_recent_four_messages_and_includes_scope() -> No
     )
 
     prompt = provider.messages[0].content
-    assert "secret-0" not in prompt and "secret-1" not in prompt
-    assert "secret-2" in prompt and "secret-5" in prompt
+    assert "secret-0" not in prompt
+    assert "secret-1" not in prompt
+    assert "secret-2" in prompt
+    assert "secret-5" in prompt
     assert '"type":"documents"' in prompt
     assert "retrieval results" not in prompt.lower()
 

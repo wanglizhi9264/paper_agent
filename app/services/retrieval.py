@@ -82,9 +82,7 @@ async def search_corpus(
 
     bm25 = BM25Index.from_dict(json.loads(Path(snapshot.bm25_path).read_text(encoding="utf-8")))
     sparse_query = (
-        request.query
-        if original_query == request.query
-        else f"{original_query}\n{request.query}"
+        request.query if original_query == request.query else f"{original_query}\n{request.query}"
     )
     sparse = bm25.search(
         sparse_query,
@@ -136,9 +134,7 @@ async def search_corpus(
 
     results: list[SearchResultOut] = []
     expansions: dict[str, list[str]] = {}
-    for rank, (faiss_id, score, _source) in enumerate(
-        unique_ranked[: request.top_k], start=1
-    ):
+    for rank, (faiss_id, score, _source) in enumerate(unique_ranked[: request.top_k], start=1):
         chunk, document = by_faiss[faiss_id]
         context_content = chunk.raw_content
         expanded_chunk_ids = [chunk.id]
@@ -149,6 +145,7 @@ async def search_corpus(
             expanded_chunk_ids = expanded.chunk_ids
             expansions[str(chunk.id)] = [str(chunk_id) for chunk_id in expanded.chunk_ids]
         metadata = chunk.metadata_ or {}
+        element_kind = _citation_element_kind(metadata)
         results.append(
             SearchResultOut(
                 chunk_id=chunk.id,
@@ -161,7 +158,7 @@ async def search_corpus(
                 context_content=context_content,
                 expanded_chunk_ids=expanded_chunk_ids,
                 element_id=metadata.get("element_id"),
-                element_kind=metadata.get("element_kind"),
+                element_kind=element_kind,
                 cell_ids=metadata.get("cell_ids") or [],
                 bboxes=metadata.get("bboxes") or [],
                 score=score,
@@ -183,6 +180,13 @@ async def search_corpus(
         degraded_reasons=degraded_reasons,
         debug=debug,
     )
+
+
+def _citation_element_kind(metadata: dict[str, object]) -> str | None:
+    element_kind = metadata.get("element_kind")
+    if metadata.get("chunk_subtype") == "table_raw_text" and not metadata.get("cell_ids"):
+        return "table_raw_text"
+    return str(element_kind) if element_kind is not None else None
 
 
 def _as_table_context(chunk: Chunk) -> TableContextChunk:

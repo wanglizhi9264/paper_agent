@@ -17,10 +17,39 @@ from uuid import uuid4
 
 import pytest
 
+from app.loaders.pymupdf_adapter import repair_extracted_table_rows
 from tests.fixtures.pdf_runner import load_pdf_in_subprocess
 from tests.fixtures.pdf_v2.generators import _run
 
 _FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "pdf_v2"
+
+
+def test_repair_extracted_rows_expands_aligned_multiline_cells() -> None:
+    rows, boxes, expanded = repair_extracted_table_rows(
+        [
+            ["Methods", "Metrics"],
+            ["Tiny\nLarge", "0.1 0.9\n0.05 0.99"],
+        ],
+        [[None, None], [None, None]],
+    )
+
+    assert expanded is True
+    assert rows == [
+        ["Methods", "Metrics"],
+        ["Tiny", "0.1 0.9"],
+        ["Large", "0.05 0.99"],
+    ]
+    assert len(boxes) == 3
+
+
+def test_repair_extracted_rows_stitches_decimal_fragments() -> None:
+    rows, _boxes, expanded = repair_extracted_table_rows(
+        [["Ours", "9", ".46±0.11 3.17"]], [[None, None, None]]
+    )
+
+    assert expanded is False
+    assert rows == [["Ours", "", "9.46±0.11 3.17"]]
+
 
 _PARSE_SCRIPT = r"""
 import json, sys

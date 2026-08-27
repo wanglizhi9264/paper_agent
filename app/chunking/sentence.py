@@ -16,10 +16,12 @@ import re
 from dataclasses import dataclass
 
 # Sentence-end punctuation: Chinese (full-width) + English (half-width).
-_SENT_END = "。！？.!?。！？"
 # Trailing closers that stay with the sentence: quotes, brackets, spaces.
 _TRAILING = "）)」』\"'】\u3000 "
-_SPLIT_RE = re.compile(rf"([{_SENT_END}][{_TRAILING}]*)")
+# A period between two digits belongs to a decimal value (for example 13.61),
+# not to a sentence boundary. Other English and Chinese terminators retain the
+# original deterministic splitting behaviour.
+_SPLIT_RE = re.compile(rf"((?:(?<!\d)\.|\.(?!\d)|[!?。！？])[{_TRAILING}]*)")
 
 # Secondary split delimiters for over-long sentences (spec §12.2 rule 3).
 _SEMICOLON_RE = re.compile(r"[；;]")

@@ -6,7 +6,7 @@ Local-first, single-user paper RAG assistant targeting an NVIDIA RTX 2060 (6 GB)
 
 Production wiring complete. The full pipeline runs end-to-end: upload → parse → chunk → embed → index (FAISS + BM25) → search (Dense + BM25 + RRF + rerank) → context pack → LLM → citation. See [`memory.md`](memory.md) for detailed progress and [`docs/dod-checklist.md`](docs/dod-checklist.md) for the Definition of Done checklist.
 
-PDF Ingestion V2 is a staged architecture upgrade. V2-0 through V2-2 are accepted; V2-3 through V2-6 have complete code contracts, adapters, deterministic tests, migration, and production activation wiring. Per the 2026-08-26 coding-only run, real Docling/MinerU smoke, private-paper A/B, PostgreSQL/FAISS integration, and private benchmark gates remain explicitly pending. See [`docs/pdf-ingestion-v2-spec.md`](docs/pdf-ingestion-v2-spec.md) and [`docs/pdf-ingestion-v2-handoff.md`](docs/pdf-ingestion-v2-handoff.md).
+PDF Ingestion V2 is a staged architecture upgrade. V2-0 through V2-2 are accepted; V2-3 through V2-8 have code contracts, adapters, deterministic tests, migration, production activation wiring, and fail-closed release gates. On 2026-08-26 PostgreSQL migration round-trip and production Worker startup/recovery were verified locally. Real Docling/MinerU smoke, private-paper A/B, V2 reindex quality, and the private benchmark release gate remain explicitly pending. See [`docs/pdf-ingestion-v2-spec.md`](docs/pdf-ingestion-v2-spec.md) and [`docs/pdf-ingestion-v2-handoff.md`](docs/pdf-ingestion-v2-handoff.md).
 
 ## Prerequisites
 
@@ -239,6 +239,8 @@ All configuration uses the `PAPER_RAG_` prefix and is loaded from environment va
 | `PAPER_RAG_EMBEDDING_DEVICE` | `cuda:0` | torch device |
 | `PAPER_RAG_EMBEDDING_DTYPE` | `float16` | FP16 for RTX 2060 |
 | `PAPER_RAG_RERANK_MODEL` | `BAAI/bge-reranker-base` | Cross-encoder model id |
+| `PAPER_RAG_PDF_PARSER` | `auto` | PDF parser: auto/pymupdf/docling/mineru |
+| `PAPER_RAG_DOCLING_PYMUPDF_TABLE_FALLBACK` | `true` | Recover table structure/text on pages where Docling found no table |
 | `PAPER_RAG_LLM_BASE_URL` | `http://127.0.0.1:11434/v1` | OpenAI-compatible endpoint (Ollama default) |
 | `PAPER_RAG_LLM_MODEL` | `qwen3:4b-instruct` | Generator model name |
 | `PAPER_RAG_GPU_MAX_CONCURRENCY` | `1` | GPU semaphore (RTX 2060 constraint) |

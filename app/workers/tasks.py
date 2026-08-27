@@ -65,6 +65,7 @@ async def ingestion_task(
         if kind in (JobKind.INGEST.value, JobKind.REINDEX.value):
             settings = get_settings()
             artifact_manager = None
+            parser: V2PDFDocumentParser | RealDocumentParser
             if document.extension == "pdf":
                 from app.services.ir_artifacts import IRArtifactManager
 
