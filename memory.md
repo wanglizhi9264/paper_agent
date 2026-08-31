@@ -15,6 +15,7 @@
 - 当前主 `.venv` 已安装 PyTorch `2.13.0+cu130` / torchvision `0.28.0+cu130`，RTX 2060 可用；E5 与 BGE 真实 GPU smoke 均通过，单模型峰值约 546 MiB。MinerU 3.4.5 隔离环境已可执行；用户提供的 PPDocLayoutV2 完整权重已放入 ModelScope cache，pipeline 仍缺 unimernet、pp_formulanet、OCR 和 3 个 table 组件。Docling CodeFormulaV2 仍缺完整权重，当前真实链路明确使用 `formula_enrichment=false`。
 - Hybrid fallback 已在 DDPM、LMM、ACTOR、Motion Intent 四篇完成正式 CUDA reindex，6 篇保持 ready，active snapshot 为 `2d0e23b3-da8c-4631-aceb-85cf0c656167`；52/52 answerable labels 可冻结，11/11 hard-case 的精确引文、物理页、table binding 与 bbox gate 通过。
 - DeepSeek 官方 `deepseek-v4-flash` 已通过真实 chat/citation 调用。60 题 Full Pipeline 运行 60/60 无预测错误，baseline 未达发布门：Recall@10 0.367、Citation Precision 0.202、Citation Recall 0.243、Unanswerable rejection 0.25、平均延迟 13.6 秒。修复生产 chat 未使用严格 prompt/最终生成遗漏历史后，8 题定向复测拒答率提升为 1.0；多轮 Recall@10 仍为 0.25，剩余主问题是 retrieval 与 frozen chunk-label 对齐，不能宣称 release 通过。
+- 2026-08-31 完成 60 题全英文 query A/B（54 道中文题及其用户历史在本地等义翻译，scope、答案、labels、snapshot 不变）：60/60 无调用错误；Recall@10 从 0.3665 小幅升至 0.4008，Citation Precision 0.2182、Citation Recall 0.2330、Unanswerable rejection 1.0。相对原 baseline 有 7 题 MISS→hit、4 题 hit→MISS，且严格证据 prompt 错误拒答 13 道 answerable；结果证明跨语言是影响因素但不是当前低召回的唯一或主导解释，仍需审计 query rewrite、候选召回与 frozen labels。
 - 已验证可用：Docker Compose PostgreSQL 16 / Redis 7、Alembic、真实 Loader/Chunker Worker、全语料 FAISS+BM25 snapshot、documents/collections/jobs/search/sessions/chat/SSE API、前端真实 API 闭环。
 - 6 份 SHA-256 匹配的私有语料已真实重建：全部 `ready`，页数分别为 11/27/33/12/12/272，均有非零 Chunk；HTTP search 与 chat/citation 已命中真实论文内容。
 - 本机功能验收使用显式 fake embedding/reranker/LLM，以验证无网络的完整软件闭环；这不是 RTX 2060 真实模型质量或速度验收结果。
@@ -274,6 +275,7 @@ max_upload_bytes: 104857600
 | 2026-08-27 | 质量门与检索 baseline | Ruff/format/mypy/pytest、PostgreSQL migration integration、前端 lint/typecheck/test/build、60 题 live search | Ruff/format/mypy 通过；pytest **603 通过、7 skipped**；migration 4 通过；前端 6 测试与 build 通过；60/60 search API 成功，Recall@10 约 0.376，未达 0.85。 |
 | 2026-08-27 | DeepSeek Full Pipeline 与定向复测 | DeepSeek 官方 chat smoke；60 题 release；修复后 6 多轮 + 8 不可回答定向 live eval | smoke 成功（2 citations）；60/60 无错误但四门均未过（0.367/0.202/0.243/0.25）；严格 prompt + 生成历史修复后不可回答 **8/8**，多轮 Recall 仍 **0.25**。 |
 | 2026-08-27 | DeepSeek 修复后后端质量门 | `ruff check .`、`ruff format --check .`、`mypy app`、`pytest -q` | Ruff/format 通过；mypy 101 文件通过；pytest **605 通过、7 skipped**。7 skipped 仍为 4 个独立 PostgreSQL migration 门及 Docling/MinerU/private release 显式 smoke；本轮 private release 已由 CLI 手工真实运行。 |
+| 2026-08-31 | 60 题英文 query A/B | 本地等义翻译 54 道中文题及多轮用户历史；`python -m eval.pdf_v2_release ... --allow-live-api`；逐题 frozen-label 审计 | 60/60 无 prediction error；Recall@10 **0.4008**、Citation P **0.2182**、Citation R **0.2330**、Unanswerable **1.0**；7 MISS→hit、4 hit→MISS，13 道 answerable 被错误拒答；release 仍失败。 |
 
 ## 9. 未决事项
 
