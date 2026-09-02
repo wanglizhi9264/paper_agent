@@ -1,0 +1,18 @@
+{
+  "corpus": {
+    "documents": true,
+    "model_manifest": true,
+    "parser_manifests": true,
+    "passed": true,
+    "quality_gates": true,
+    "snapshot": true,
+    "v2_table_citation_bbox": true
+  },
+  "hard_cases": {
+    "failures": [],
+    "passed": true,
+    "resolved": 11,
+    "total": 11
+  },
+  "passed": true
+}

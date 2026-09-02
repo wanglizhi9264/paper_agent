@@ -1,0 +1,40 @@
+{
+  "gates": {
+    "citation_precision": {
+      "passed": false,
+      "threshold": 0.95,
+      "value": 0.21818181818181817
+    },
+    "citation_recall": {
+      "passed": false,
+      "threshold": 0.85,
+      "value": 0.23300970873786409
+    },
+    "prediction_errors": {
+      "passed": true,
+      "threshold": 0,
+      "value": 0
+    },
+    "recall@10": {
+      "passed": false,
+      "threshold": 0.85,
+      "value": 0.4008241758241758
+    },
+    "unanswerable_rejection": {
+      "passed": true,
+      "threshold": 0.8,
+      "value": 1.0
+    }
+  },
+  "metrics": {
+    "citation_precision": 0.21818181818181817,
+    "citation_recall": 0.23300970873786409,
+    "dev_recall@10": 0.34710424710424714,
+    "mean_latency_ms": 13103.218333333332,
+    "prediction_errors": 0,
+    "recall@10": 0.4008241758241758,
+    "test_recall@10": 0.5333333333333333,
+    "unanswerable_rejection": 1.0
+  },
+  "passed": false
+}

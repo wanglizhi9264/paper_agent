@@ -1,0 +1,1353 @@
+{
+  "predictions": [
+    {
+      "id": "eval-001",
+      "retrieved_chunk_ids": [
+        "f80fdf91-3cff-463a-9a65-627fdae3bd54",
+        "5b486df9-3860-4bcb-b5a0-035465f880b4",
+        "28286f01-32c0-42e7-8915-a018abab703e",
+        "141666e4-dc73-4579-afe5-62de65498204",
+        "f37714f4-375a-4adc-8b86-dfa22b6658cb",
+        "2f6fc6e7-2af3-4987-b9fe-d44e11a7e10c",
+        "01cb3354-58fb-4578-85cd-48c6526254fa",
+        "33513f3e-08b4-4209-b760-2081fa929d00",
+        "993f42fe-e421-4f9f-bae4-a5f7f5fc685a",
+        "4b6f041b-b38a-4cee-98e3-c60dc729916b"
+      ],
+      "predicted_citation_chunk_ids": [
+        "f80fdf91-3cff-463a-9a65-627fdae3bd54",
+        "141666e4-dc73-4579-afe5-62de65498204"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "DDPM reports an Inception score of 9.46 and an FID score of 3.17 on unconditional CIFAR-10 [1][4].",
+      "latency_ms": 11606.661,
+      "error_category": null
+    },
+    {
+      "id": "eval-002",
+      "retrieved_chunk_ids": [
+        "97a1eaf0-b4d6-4443-9536-748c5fb361ab",
+        "dc5c1395-8298-454e-9a95-0914c3f8bb0a",
+        "75ad8231-9f1a-4b28-83ae-722a8114d772",
+        "bf27a2e1-bc03-412f-8646-4305da36578b",
+        "c30f5992-ce77-4356-bb56-1e90c03f1ee6",
+        "9da4b1bf-a1e1-405c-9405-1ae360099226",
+        "0a092c6e-772e-407d-86a1-3442b1d92c0f",
+        "56bd7bc0-8564-4220-b6d7-6ffa72774838",
+        "f5095cd6-87c7-44ce-b344-67327a220a6b",
+        "3116303b-6418-4907-800c-2b17dccf5808"
+      ],
+      "predicted_citation_chunk_ids": [],
+      "rejected_unanswerable": true,
+      "answer": "Insufficient evidence in the provided sources.",
+      "latency_ms": 8962.423,
+      "error_category": null
+    },
+    {
+      "id": "eval-003",
+      "retrieved_chunk_ids": [
+        "d34ba575-c3ae-47aa-a2dd-ecf9b21e2d69",
+        "0f8f8d42-d30d-4d95-99cb-d0a43f8f71bf",
+        "650f1356-ac36-42fd-ad21-b9cffe886b04",
+        "11f5c28b-7007-41a3-ad84-4d62cd66b9cc",
+        "142b9edd-52e8-461e-bc21-3fb4d1cbd4b0",
+        "2e46ffd8-cc48-4e75-a493-754472bbdb8a",
+        "19104d27-e5cc-4996-91e9-bd6aa47102fd",
+        "c90faf90-2165-46d0-9520-8e694cb8fca0",
+        "7a1fc74a-7b58-44eb-a643-07a9dd320d47",
+        "ad4ed573-f377-4a81-ac14-24ab23c5d60c"
+      ],
+      "predicted_citation_chunk_ids": [
+        "0f8f8d42-d30d-4d95-99cb-d0a43f8f71bf",
+        "11f5c28b-7007-41a3-ad84-4d62cd66b9cc"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "MotionVerse comprises **10 tasks**, **16 datasets**, **320k sequences**, and **100 million frames** [2][4].",
+      "latency_ms": 8626.499,
+      "error_category": null
+    },
+    {
+      "id": "eval-004",
+      "retrieved_chunk_ids": [
+        "ae4a7d05-e26a-484d-9c0e-4fbf1a24badd",
+        "4993913e-b461-481c-881e-1c6ffe11fed0",
+        "08d13061-68ec-4a47-b3ea-2720db529050",
+        "dc95dfa8-999e-4a89-948b-76f11b303ced",
+        "5330396d-b32b-449d-b837-379cc2b56f26",
+        "1e9d28c2-438f-4a76-bccb-e65f190cd35d",
+        "43bfca5d-c6b9-4853-9b31-c7dfcde4b2cb",
+        "2956f056-2d15-46f0-aa47-45a204711288",
+        "d31116d2-ee6b-4b0f-9ad3-185b41850d97",
+        "29b40ae0-9ed4-4ddf-9a93-300efff5a69b"
+      ],
+      "predicted_citation_chunk_ids": [
+        "4993913e-b461-481c-881e-1c6ffe11fed0",
+        "08d13061-68ec-4a47-b3ea-2720db529050",
+        "2956f056-2d15-46f0-aa47-45a204711288"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "The ACTOR paper evaluates its approach on the NTU RGB+D, HumanAct12, and UESTC datasets [2][3][8].",
+      "latency_ms": 8706.601,
+      "error_category": null
+    },
+    {
+      "id": "eval-005",
+      "retrieved_chunk_ids": [
+        "2892aa04-dcfa-440b-9066-81a5c070cc90",
+        "5cf97c94-8d99-412d-9a03-36eb37670409",
+        "4304a3bd-b835-4c45-bf5f-4e4b2d8c13c1",
+        "45036225-71ca-4991-b377-f65de263ae9b",
+        "0a2dd90f-dadc-4064-864b-2ea2cd0f68e8",
+        "d6e17b7c-2980-46c5-93ff-a4ce7d8ffa9f",
+        "f042c88e-81ae-4ace-9424-ce24d58ff2f7",
+        "386034ac-bf54-46ed-a303-1cbcdda0f4b3",
+        "cfabdd32-1c0e-4f9c-8250-6ebafb5a2282",
+        "a0382af9-7c54-4e85-aebb-6efb3237e77e"
+      ],
+      "predicted_citation_chunk_ids": [
+        "5cf97c94-8d99-412d-9a03-36eb37670409",
+        "d6e17b7c-2980-46c5-93ff-a4ce7d8ffa9f"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "According to the paper, the signal branch uses **EEG/EMG signals**, and the sensor branch uses **sensor measure data** [2]. Specifically, the EEG/EMG signals are collected from the **HumanAct1239 dataset**, while the sensor measure data are obtained from the **MotionID: IMU-specific motion dataset** [6].",
+      "latency_ms": 10714.129,
+      "error_category": null
+    },
+    {
+      "id": "eval-006",
+      "retrieved_chunk_ids": [
+        "2d6e5447-474a-40cd-b98e-63a925dd9f63",
+        "475f9ec3-933a-4325-8e4d-945a2c7c2d55",
+        "7024bc36-8c8d-4a03-803a-dbef97c5eb11",
+        "a68cb8e3-d3c9-45c7-bb49-047f29ce9170",
+        "32d29fa7-5999-480b-9116-c78a467b37c7",
+        "12d47dd0-ca63-4007-85ed-0cad6ee34d7b",
+        "71e06f79-82f3-4455-9fac-ce995504db54",
+        "ef08a20b-17c9-4229-b6ee-d4bef7878453",
+        "15e10b24-6333-4610-9acb-547fd7bf53c9",
+        "da04be76-37d4-4295-8226-b1bf0178d0a6"
+      ],
+      "predicted_citation_chunk_ids": [
+        "2d6e5447-474a-40cd-b98e-63a925dd9f63"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "According to the source, an abstract usually has a strict word limit, with most being between 80–150 words and written as a single paragraph. Even longer abstracts (150–250 words) are usually written as a single paragraph, and one should not submit an abstract over the word limit [1].",
+      "latency_ms": 9858.954,
+      "error_category": null
+    },
+    {
+      "id": "eval-007",
+      "retrieved_chunk_ids": [
+        "5f4182e6-e505-478e-b1af-d71fe543e8d7",
+        "de94cad4-90fb-466a-a246-51a55e85b5a9",
+        "8ce192ad-8d3c-439c-a9fb-151e28f7505f",
+        "b0a87fef-63ce-4bad-af32-443fc0276231",
+        "01fa7798-18cc-45de-9d77-7b748c9d34b7",
+        "39417553-3d90-4c4e-97ba-2bece8d2ae21",
+        "acf753ba-f023-471d-9f23-9925359a3753",
+        "9f079d90-5496-44e1-aad5-2f7f6b21e0ec",
+        "a97dce0d-b2ca-4e87-8c8a-93df998698b6",
+        "d305ac6c-c8f1-404e-9acb-ae7544c0624a"
+      ],
+      "predicted_citation_chunk_ids": [],
+      "rejected_unanswerable": true,
+      "answer": "Insufficient evidence in the provided sources.",
+      "latency_ms": 9733.652,
+      "error_category": null
+    },
+    {
+      "id": "eval-008",
+      "retrieved_chunk_ids": [
+        "650f1356-ac36-42fd-ad21-b9cffe886b04",
+        "eb234705-972b-4b0b-b9ab-c42896fc47cd",
+        "3cf1c64e-56aa-452f-b1a1-7f8740940595",
+        "78b6c359-26a6-4d22-9628-9abade3149de",
+        "dfd2ee55-c301-4dae-9706-81ff1388c01e",
+        "988c58c0-2622-4342-8dda-92a61763faff",
+        "8c16e916-14bf-4195-bbd9-29a8caaf9489",
+        "2e46ffd8-cc48-4e75-a493-754472bbdb8a",
+        "19104d27-e5cc-4996-91e9-bd6aa47102fd",
+        "c90faf90-2165-46d0-9520-8e694cb8fca0"
+      ],
+      "predicted_citation_chunk_ids": [
+        "650f1356-ac36-42fd-ad21-b9cffe886b04",
+        "78b6c359-26a6-4d22-9628-9abade3149de"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "LMM-Tiny has 90M parameters, LMM-Small has 160M, LMM-Base has 410M, and LMM-Large has 760M parameters [1][4].",
+      "latency_ms": 8629.03,
+      "error_category": null
+    },
+    {
+      "id": "eval-009",
+      "retrieved_chunk_ids": [
+        "dc95dfa8-999e-4a89-948b-76f11b303ced",
+        "5330396d-b32b-449d-b837-379cc2b56f26",
+        "85c46359-7c8e-4bfd-8432-33a13e837aa2",
+        "638b2dfa-ed47-4b07-bd0b-9053f725f3c7",
+        "2d70f06b-a7c3-4b76-9b91-aa1ad5f05ffd",
+        "29b40ae0-9ed4-4ddf-9a93-300efff5a69b",
+        "3fcc88ab-f45c-43a7-b7bc-67e34dbe14d3",
+        "c36882b2-f6b6-4df1-a8bf-cb0cd8ba0e07",
+        "2956f056-2d15-46f0-aa47-45a204711288",
+        "4993913e-b461-481c-881e-1c6ffe11fed0"
+      ],
+      "predicted_citation_chunk_ids": [
+        "dc95dfa8-999e-4a89-948b-76f11b303ced",
+        "5330396d-b32b-449d-b837-379cc2b56f26"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "The UESTC dataset has 40 action categories [1]. Under the official cross-subject split used in the ACTOR experiments, there are 10,650 training sequences and 13,350 test sequences [2].",
+      "latency_ms": 8922.582,
+      "error_category": null
+    },
+    {
+      "id": "eval-010",
+      "retrieved_chunk_ids": [
+        "8a8d8908-b526-47fa-80b3-29eddcad9e50",
+        "091783cf-01e7-4d0f-90e2-8fc61da4ddc9",
+        "3627f43a-25a3-4884-8587-890c87715e5e",
+        "fae5059e-9113-4ce6-9d17-ff424f56b131",
+        "54834e56-d2d6-49e2-ae2b-017e3398ab07",
+        "f5b703e1-f66a-47f5-ba6d-5cf7dea13487",
+        "f00d82a9-8804-40d6-980c-0bdb13ccaa8b",
+        "6bdce557-757c-4eec-b5dc-e2ef6db2faa8",
+        "b1add0f5-f917-41df-b491-8c047b47de72",
+        "87c5f124-68ce-41ea-8ffe-b804def30509"
+      ],
+      "predicted_citation_chunk_ids": [
+        "8a8d8908-b526-47fa-80b3-29eddcad9e50"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "According to the writing guide, the best time to write the Introduction is after you have written, or at least drafted, the report sections [1].",
+      "latency_ms": 8989.599,
+      "error_category": null
+    },
+    {
+      "id": "eval-011",
+      "retrieved_chunk_ids": [
+        "f11647ea-8859-4454-9343-9fe08adb5efc",
+        "f74dbab0-b625-4cf9-81a8-4740e1f52d34",
+        "e9ad4324-2530-41a3-8e48-e55382b27615",
+        "040a1953-2d0d-4470-ba78-f20ffcfef58d",
+        "88f30388-3036-421a-a710-be747d3b52cf",
+        "375e5b90-64a8-44aa-8e82-c9338496aae0",
+        "cf760228-92a3-43de-85eb-7e53f79ba051",
+        "f2666956-ec48-42f9-a356-517042fbd717",
+        "f2c395fd-9b69-4357-a6d8-e0c8afee0313",
+        "e7a54ba0-0a3b-4b84-b03b-116fb26e6588"
+      ],
+      "predicted_citation_chunk_ids": [
+        "f74dbab0-b625-4cf9-81a8-4740e1f52d34",
+        "375e5b90-64a8-44aa-8e82-c9338496aae0"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "The forward process (diffusion process) is a fixed Markov chain that gradually adds Gaussian noise to the data according to a variance schedule β₁, …, β_T [2]. The reverse process is a learned Markov chain with Gaussian transitions that starts from a standard normal prior p(x_T) = N(0, I) and gradually recovers the data by denoising [6].",
+      "latency_ms": 10682.969,
+      "error_category": null
+    },
+    {
+      "id": "eval-012",
+      "retrieved_chunk_ids": [
+        "82a4ab2a-3273-427e-bb55-a32b5e7de349",
+        "5126c7aa-f899-484c-92a9-9ad6b3b9fee9",
+        "88f30388-3036-421a-a710-be747d3b52cf",
+        "fa3cef5f-3426-4875-b709-7f4403c7352f",
+        "2f5cb43a-45bf-478a-bbe7-2f4d6d151d12",
+        "188a76df-ad1d-420c-9423-2b7f2f092614",
+        "5c31b2a5-e192-455d-9292-a830b6061049",
+        "86098f3c-9ba8-4c26-99f6-c9d137475e30",
+        "040a1953-2d0d-4470-ba78-f20ffcfef58d",
+        "fccffd3b-b20f-4c10-9822-5f2dab4f2fcb"
+      ],
+      "predicted_citation_chunk_ids": [
+        "82a4ab2a-3273-427e-bb55-a32b5e7de349",
+        "fa3cef5f-3426-4875-b709-7f4403c7352f",
+        "5c31b2a5-e192-455d-9292-a830b6061049"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "DDPM can parameterize the reverse process by predicting the noise \\(\\epsilon\\) because the reverse-process mean \\(\\mu_\\theta\\) has the form  \n\\[\n\\frac{1}{\\sqrt{\\alpha_t}}\\left(x_t - \\frac{\\beta_t}{\\sqrt{1-\\bar\\alpha_t}}\\epsilon\\right),\n\\]\nso, since \\(x_t\\) is known as model input, predicting \\(\\epsilon\\) is an equivalent reparameterization of predicting the mean [7].\n\nThis \\(\\epsilon\\)-prediction parameterization establishes a connection between diffusion models and **denoising score matching over multiple noise levels with annealed Langevin dynamics for sampling** [1]. It also resembles Langevin dynamics and simplifies the diffusion model's variational bound to an objective resembling denoising score matching [4].",
+      "latency_ms": 12459.444,
+      "error_category": null
+    },
+    {
+      "id": "eval-013",
+      "retrieved_chunk_ids": [
+        "acf753ba-f023-471d-9f23-9925359a3753",
+        "9f079d90-5496-44e1-aad5-2f7f6b21e0ec",
+        "a97dce0d-b2ca-4e87-8c8a-93df998698b6",
+        "bdf088ac-6224-44f3-a85d-de25221b7863",
+        "78952240-ee08-49fa-8dc2-a08c936900bd",
+        "aaba16ff-074d-4a40-b0d3-32a7d2cd3dda",
+        "39130e3b-939c-4e16-994e-32f7857e9aed",
+        "c78c68c9-5fa0-4e22-8136-023f7487bc9f",
+        "47f0fa39-5aba-4602-8941-ebc45bfcf7b9",
+        "8e164f80-ce44-4e96-9696-2ef7be5eb1f0"
+      ],
+      "predicted_citation_chunk_ids": [
+        "9f079d90-5496-44e1-aad5-2f7f6b21e0ec"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "In EEG2IM, high-level semantic features are learned using a high-level semantic encoder that is trained via knowledge distillation, where it learns from a ResNet50 teacher model through both response-based and feature-based methods [2].",
+      "latency_ms": 8077.038,
+      "error_category": null
+    },
+    {
+      "id": "eval-014",
+      "retrieved_chunk_ids": [
+        "acf753ba-f023-471d-9f23-9925359a3753",
+        "9f079d90-5496-44e1-aad5-2f7f6b21e0ec",
+        "a97dce0d-b2ca-4e87-8c8a-93df998698b6",
+        "d305ac6c-c8f1-404e-9acb-ae7544c0624a",
+        "01fa7798-18cc-45de-9d77-7b748c9d34b7",
+        "bdf088ac-6224-44f3-a85d-de25221b7863",
+        "78952240-ee08-49fa-8dc2-a08c936900bd",
+        "aaba16ff-074d-4a40-b0d3-32a7d2cd3dda",
+        "39130e3b-939c-4e16-994e-32f7857e9aed",
+        "c78c68c9-5fa0-4e22-8136-023f7487bc9f"
+      ],
+      "predicted_citation_chunk_ids": [
+        "9f079d90-5496-44e1-aad5-2f7f6b21e0ec",
+        "a97dce0d-b2ca-4e87-8c8a-93df998698b6"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "EEG2IM extracts low-level semantics using a **low-level semantic encoder**, which captures fine-grained attributes and is aligned with image features from an autoencoder via joint training [2]. Both the high-level features (from the high-level semantic encoder) and the low-level features are then incorporated into the diffusion model using **Feature-wise Linear Modulation (FiLM)**, enabling precise control over image synthesis while preserving semantic consistency and fine details [3].",
+      "latency_ms": 9885.857,
+      "error_category": null
+    },
+    {
+      "id": "eval-015",
+      "retrieved_chunk_ids": [
+        "d34ba575-c3ae-47aa-a2dd-ecf9b21e2d69",
+        "0f8f8d42-d30d-4d95-99cb-d0a43f8f71bf",
+        "ad4ed573-f377-4a81-ac14-24ab23c5d60c",
+        "2e46ffd8-cc48-4e75-a493-754472bbdb8a",
+        "19104d27-e5cc-4996-91e9-bd6aa47102fd",
+        "c90faf90-2165-46d0-9520-8e694cb8fca0",
+        "9ca6b24e-ec20-4f0f-ba54-6ae98368f6a5",
+        "d73c17d4-cf84-4c86-ad8f-a6394938a6db",
+        "c6660832-b501-4260-848b-c7b260a5c532",
+        "e93631d8-4431-4b23-a267-59e99668f6b8"
+      ],
+      "predicted_citation_chunk_ids": [
+        "0f8f8d42-d30d-4d95-99cb-d0a43f8f71bf",
+        "ad4ed573-f377-4a81-ac14-24ab23c5d60c",
+        "2e46ffd8-cc48-4e75-a493-754472bbdb8a",
+        "d73c17d4-cf84-4c86-ad8f-a6394938a6db"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "LMM unifies motions from different datasets and body-representation formats by converting the motion formats of various datasets into a unified intermediate representation, enabling the model to acquire common knowledge from originally diverse data formats [8]. All motion data are aligned to this unified intermediate format, and all condition signals are converted into token sequences that are closer in feature space [3]. This alignment is part of the broader MotionVerse benchmark, which consolidates datasets with different modalities, formats, and tasks into a comprehensive, unified motion generation dataset [2]. Additionally, body part-aware modeling decomposes motion data from different datasets into relatively independent body segments, allowing the model to leverage knowledge learned across datasets [4].",
+      "latency_ms": 9784.208,
+      "error_category": null
+    },
+    {
+      "id": "eval-016",
+      "retrieved_chunk_ids": [
+        "b58ade50-546c-4b8c-8d76-d1c73da4a4ba",
+        "2e46ffd8-cc48-4e75-a493-754472bbdb8a",
+        "19104d27-e5cc-4996-91e9-bd6aa47102fd",
+        "c90faf90-2165-46d0-9520-8e694cb8fca0",
+        "eebf8583-f2d1-4650-b04f-c01ba78f2f81",
+        "d34ba575-c3ae-47aa-a2dd-ecf9b21e2d69",
+        "0f8f8d42-d30d-4d95-99cb-d0a43f8f71bf",
+        "0c950f87-b4e0-49cf-8e00-e8fe011a62ab",
+        "ad4ed573-f377-4a81-ac14-24ab23c5d60c",
+        "c6660832-b501-4260-848b-c7b260a5c532"
+      ],
+      "predicted_citation_chunk_ids": [
+        "b58ade50-546c-4b8c-8d76-d1c73da4a4ba",
+        "2e46ffd8-cc48-4e75-a493-754472bbdb8a",
+        "eebf8583-f2d1-4650-b04f-c01ba78f2f81"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "The two main attention components in LMM’s ArtAttention are **body-part attention (spatial attention)** and **temporal attention** [1][5].\n\n- **Body-part (spatial) attention** models the mutual contributions among body parts on a per-frame basis; because body parts can be inherently missing or artificially masked, it uses an attention structure to produce refined frame-level features rather than fixed coefficients [1].\n- **Temporal attention** is the other branch of ArtAttention, with the mechanism designed for spatial-temporal independence [2][5]. The sources describe it as the temporal attention component, but do not provide further detail on its exact modeling beyond its role in the temporal attention branch [1][5].",
+      "latency_ms": 12715.199,
+      "error_category": null
+    },
+    {
+      "id": "eval-017",
+      "retrieved_chunk_ids": [
+        "9bbe2308-1c4c-4a7f-83cc-2a5210d34535",
+        "9f61302e-ab08-4fba-b1c3-ba9f842ac10b",
+        "2956f056-2d15-46f0-aa47-45a204711288",
+        "1e9d28c2-438f-4a76-bccb-e65f190cd35d",
+        "e98f98b4-ae6f-4cb3-9643-9aaa8bb20e8a",
+        "43bfca5d-c6b9-4853-9b31-c7dfcde4b2cb",
+        "4993913e-b461-481c-881e-1c6ffe11fed0",
+        "08d13061-68ec-4a47-b3ea-2720db529050",
+        "3360e312-b004-4977-86a3-f2eb51c168eb",
+        "9d7674c0-636d-47e3-8ed1-5194da70c313"
+      ],
+      "predicted_citation_chunk_ids": [
+        "9bbe2308-1c4c-4a7f-83cc-2a5210d34535",
+        "9f61302e-ab08-4fba-b1c3-ba9f842ac10b"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "ACTOR’s encoder compresses an arbitrary-length motion sequence into a sequence-level latent vector by using learnable “distribution parameter tokens” to pool the temporal dimension [1][2]. Specifically, the pose parameters and translations are linearly embedded, and two learnable tokens per action—\\(\\mu_{\\text{token}}^a\\) and \\(\\Sigma_{\\text{token}}^a\\)—are prepended to the embedded pose sequence [2]. The Transformer encoder processes this input, and the first two encoder outputs corresponding to the distribution parameter tokens are taken as the pooled distribution parameters \\(\\mu\\) and \\(\\Sigma\\), while the rest are discarded [2]. A latent vector \\(z\\) is then sampled from this distribution using the reparameterization trick [1].",
+      "latency_ms": 11201.41,
+      "error_category": null
+    },
+    {
+      "id": "eval-018",
+      "retrieved_chunk_ids": [
+        "2956f056-2d15-46f0-aa47-45a204711288",
+        "21ea25df-21a4-4a2d-9f33-c542ac34c074",
+        "4993913e-b461-481c-881e-1c6ffe11fed0",
+        "08d13061-68ec-4a47-b3ea-2720db529050",
+        "5494afd1-1d31-4f6c-abdc-1e471ff399a7",
+        "e0c535d2-ffaa-4f02-ad45-b2b721a96570",
+        "0d275fd9-77a1-4d54-a474-19457ec46042",
+        "afd1435a-74db-4da8-aea5-9eba2f781c9e",
+        "36b5554f-5290-44ee-9f5d-e2a6e4a81ff7",
+        "43bfca5d-c6b9-4853-9b31-c7dfcde4b2cb"
+      ],
+      "predicted_citation_chunk_ids": [
+        "2956f056-2d15-46f0-aa47-45a204711288",
+        "21ea25df-21a4-4a2d-9f33-c542ac34c074",
+        "5494afd1-1d31-4f6c-abdc-1e471ff399a7",
+        "0d275fd9-77a1-4d54-a474-19457ec46042"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "ACTOR's decoder is called non-autoregressive because it generates the full motion sequence in one shot, rather than predicting frame-by-frame autoregressively [2][5]. Length is controlled by specifying a sequence of positional encodings to the decoder, which determines the duration of the synthesized motion [1][5][7].",
+      "latency_ms": 11456.089,
+      "error_category": null
+    },
+    {
+      "id": "eval-019",
+      "retrieved_chunk_ids": [
+        "2892aa04-dcfa-440b-9066-81a5c070cc90",
+        "5cf97c94-8d99-412d-9a03-36eb37670409",
+        "4304a3bd-b835-4c45-bf5f-4e4b2d8c13c1",
+        "3989232f-6aaa-4140-8e8b-9b75a4a1a2a9",
+        "6e6a0143-ba58-4a52-975d-2909e3334625",
+        "cad45a0a-ff72-4b71-93f6-7755b411293c",
+        "20dc87fe-68e0-44d7-80e5-4cb6c903f9a3",
+        "2b1da103-8a25-4785-9d8a-462a0d188917",
+        "b3b13097-3dab-4b39-bd57-bb094bc1acc5",
+        "6d3c53c2-117a-4164-a45b-af0dfeed2d43"
+      ],
+      "predicted_citation_chunk_ids": [
+        "5cf97c94-8d99-412d-9a03-36eb37670409",
+        "3989232f-6aaa-4140-8e8b-9b75a4a1a2a9",
+        "cad45a0a-ff72-4b71-93f6-7755b411293c",
+        "20dc87fe-68e0-44d7-80e5-4cb6c903f9a3"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "According to the sources, the EEG/EMG signals are converted into spectrogram images before being input to the AH-CNN-LSTM model [2][4]. Within the AH-CNN-LSTM model, the CNN is used for essential feature extraction, while the LSTM is used to classify human motion intentions accurately [7]. The LSTM also handles longer-range dependencies and sequential information [6].",
+      "latency_ms": 10697.831,
+      "error_category": null
+    },
+    {
+      "id": "eval-020",
+      "retrieved_chunk_ids": [
+        "0ff56d21-9be2-4c9e-b382-4d7ea7c29cb1",
+        "eb400d9e-4905-4013-8650-9eeb29290774",
+        "a93f2f1c-d403-47bf-8c7b-89e01117d483",
+        "2814d9f6-a7c9-4df7-9f3b-98d847059282",
+        "f9d69115-6776-4c2a-beda-3d38a7d0598c",
+        "54834e56-d2d6-49e2-ae2b-017e3398ab07",
+        "058b57a9-81ac-498b-8226-3d13c5be5517",
+        "51aaa8ee-b396-41c1-bffc-26db2d069c57",
+        "031b8546-2dbb-4ee9-970c-faff3a324945",
+        "ec043ec0-adfd-4db6-89c3-b05911dbd4b1"
+      ],
+      "predicted_citation_chunk_ids": [
+        "0ff56d21-9be2-4c9e-b382-4d7ea7c29cb1"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "According to the writing guide, the core reproducibility goal of a Methodology section is to describe what you did and used so that any reader can repeat exactly what you did and obtain exactly the same result [1].",
+      "latency_ms": 9378.54,
+      "error_category": null
+    },
+    {
+      "id": "eval-021",
+      "retrieved_chunk_ids": [
+        "8e9a52bb-4239-4998-b133-8091d7d7f42c",
+        "c4abb844-112a-4ba6-937f-4f433d312c8e",
+        "33513f3e-08b4-4209-b760-2081fa929d00",
+        "141666e4-dc73-4579-afe5-62de65498204",
+        "f11647ea-8859-4454-9343-9fe08adb5efc",
+        "7b69804c-30a4-42a8-a02b-769561e8046c",
+        "1ffee4b4-45a9-4fff-8823-7b71d1331870",
+        "d3b7e5a8-479d-4d7c-89bb-1bd074f1e33e",
+        "05a0e75b-f385-4245-b15e-bb090eccf12c",
+        "2ac183eb-0779-49c2-a45d-ab63044240a9"
+      ],
+      "predicted_citation_chunk_ids": [
+        "8e9a52bb-4239-4998-b133-8091d7d7f42c",
+        "141666e4-dc73-4579-afe5-62de65498204",
+        "f11647ea-8859-4454-9343-9fe08adb5efc"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "DDPM's main experiments use T = 1000 diffusion steps [4][5]. The forward process variances increase linearly from β₁ = 10⁻⁴ to β_T = 0.02 [4][5]. The reverse process is represented with a U-Net backbone similar to an unmasked PixelCNN++, with group normalization throughout and parameters shared across time via Transformer sinusoidal position embeddings [1][4]. Self-attention is used at the 16 × 16 feature map resolution [1][4].",
+      "latency_ms": 9628.257,
+      "error_category": null
+    },
+    {
+      "id": "eval-022",
+      "retrieved_chunk_ids": [
+        "141666e4-dc73-4579-afe5-62de65498204",
+        "c619437f-39df-47b3-9ef2-141f05244a3f",
+        "2f5cb43a-45bf-478a-bbe7-2f4d6d151d12",
+        "9f0a6be3-228a-4f9f-9d9b-abcfcc824f3f",
+        "965b01dd-ad08-4456-9eea-c3dceee8e796",
+        "14481a6a-89d7-4ca1-9277-23ae218f301d",
+        "3c19ce26-7aa6-474a-8b8f-27f3f2ecd13e",
+        "188a76df-ad1d-420c-9423-2b7f2f092614",
+        "682e76e5-cd54-4d40-8f04-e906a89d73b5",
+        "9828bf7f-b3f4-4bea-a409-da680fb84b00"
+      ],
+      "predicted_citation_chunk_ids": [
+        "141666e4-dc73-4579-afe5-62de65498204"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "According to DDPM Table 2 in the source, for the epsilon-prediction (“ours”) parameterization with fixed isotropic variance:\n- Trained with the standard variational bound: FID = 13.51 [1]\n- Trained with L_simple: FID = 3.17 [1]",
+      "latency_ms": 20812.722,
+      "error_category": null
+    },
+    {
+      "id": "eval-023",
+      "retrieved_chunk_ids": [
+        "9f7fe778-ec7f-4e96-b826-c932b2a704f2",
+        "f7f66996-fc07-44ec-9491-1ef5ae8fd644",
+        "e41276e6-1265-4aa6-8542-1966cd6f5808",
+        "833db756-717c-468e-befb-d54905cc475a",
+        "30e7dfa6-0884-4ed1-87da-794155e1355b",
+        "75e6d145-af9e-43de-b2d0-7b29c927f118",
+        "824e0a82-1b95-40c7-83ce-994d5f3847fa",
+        "16467ee6-dee1-4664-8823-173e8f391384",
+        "549652d2-602b-4ca6-b315-76612719d224",
+        "9fbea85b-6a95-4af7-a6e2-ee11e2cb5eba"
+      ],
+      "predicted_citation_chunk_ids": [],
+      "rejected_unanswerable": true,
+      "answer": "Insufficient evidence in the provided sources.",
+      "latency_ms": 9090.736,
+      "error_category": null
+    },
+    {
+      "id": "eval-024",
+      "retrieved_chunk_ids": [
+        "a9b0c3a5-b0dd-4834-8e39-72586542fe55",
+        "a3cc4804-4b8b-4620-b933-285d935eab62",
+        "448420ef-97df-4b4d-b7f4-16b15965f2aa",
+        "9f7fe778-ec7f-4e96-b826-c932b2a704f2",
+        "833db756-717c-468e-befb-d54905cc475a",
+        "30e7dfa6-0884-4ed1-87da-794155e1355b",
+        "75e6d145-af9e-43de-b2d0-7b29c927f118",
+        "824e0a82-1b95-40c7-83ce-994d5f3847fa",
+        "16467ee6-dee1-4664-8823-173e8f391384",
+        "549652d2-602b-4ca6-b315-76612719d224"
+      ],
+      "predicted_citation_chunk_ids": [
+        "448420ef-97df-4b4d-b7f4-16b15965f2aa"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "In the ImageNet-4 classification ablation, moving from the time-domain feature T alone to T+F+KD increases:\n\n- Accuracy: from 90.58% to 99.95%\n- F1-Score: from 90.55% to 99.93%\n\nThis is an improvement of about 9.37 percentage points in Accuracy and 9.38 percentage points in F1-Score [3].",
+      "latency_ms": 21976.721,
+      "error_category": null
+    },
+    {
+      "id": "eval-025",
+      "retrieved_chunk_ids": [
+        "390fd8c0-5c25-4915-919c-58485ced6bb7",
+        "c8af02d7-af72-42d8-a322-e6a68ccb8242",
+        "6049f022-74ed-4c59-97dc-17c5d16be9e5",
+        "ecf73388-e2b3-4d28-99cf-9c4ed40fa604",
+        "e4e1919c-2e9b-4e5b-9b05-746f9f6ecef3",
+        "74031156-1315-481a-9ce8-fe8bd233f35c",
+        "b387f54c-646a-4c7d-aa2b-3c847a07e522",
+        "ed705d94-b0e8-4286-99d6-f392dc483c52",
+        "7e0cb24d-50ae-4317-a2a9-5652bb56b27f",
+        "20ca484b-96ce-4857-8379-67c83c26a151"
+      ],
+      "predicted_citation_chunk_ids": [
+        "390fd8c0-5c25-4915-919c-58485ced6bb7"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "LMM-Large reports the following for action-conditioned motion generation:\n\n- HumanAct12: FID 0.065±.00, Accuracy 0.992±.008 [1]\n- UESTC: FID 9.01±0.54, Accuracy 0.952±.000 [1]",
+      "latency_ms": 8709.793,
+      "error_category": null
+    },
+    {
+      "id": "eval-026",
+      "retrieved_chunk_ids": [
+        "9ca6b24e-ec20-4f0f-ba54-6ae98368f6a5",
+        "d34ba575-c3ae-47aa-a2dd-ecf9b21e2d69",
+        "0f8f8d42-d30d-4d95-99cb-d0a43f8f71bf",
+        "0fd786ed-61b5-4bcd-ab85-b89255871d39",
+        "650f1356-ac36-42fd-ad21-b9cffe886b04",
+        "2e46ffd8-cc48-4e75-a493-754472bbdb8a",
+        "19104d27-e5cc-4996-91e9-bd6aa47102fd",
+        "c90faf90-2165-46d0-9520-8e694cb8fca0",
+        "4d2bdb25-36b5-4a8a-9682-486ff8c731e4",
+        "0c23414a-2ad0-4cc1-b231-6254f6ff0ac6"
+      ],
+      "predicted_citation_chunk_ids": [],
+      "rejected_unanswerable": true,
+      "answer": "Insufficient evidence in the provided sources.",
+      "latency_ms": 9064.43,
+      "error_category": null
+    },
+    {
+      "id": "eval-027",
+      "retrieved_chunk_ids": [
+        "af706288-de62-4d29-b7bb-21ff465cfbae",
+        "a9c0e921-be34-4cdd-901a-a44fa33d98b3",
+        "764291ab-8362-45d6-a749-c3c0f6d01b3f",
+        "638b2dfa-ed47-4b07-bd0b-9053f725f3c7",
+        "2d70f06b-a7c3-4b76-9b91-aa1ad5f05ffd",
+        "2956f056-2d15-46f0-aa47-45a204711288",
+        "4993913e-b461-481c-881e-1c6ffe11fed0",
+        "08d13061-68ec-4a47-b3ea-2720db529050",
+        "29b40ae0-9ed4-4ddf-9a93-300efff5a69b",
+        "3fcc88ab-f45c-43a7-b7bc-67e34dbe14d3"
+      ],
+      "predicted_citation_chunk_ids": [
+        "a9c0e921-be34-4cdd-901a-a44fa33d98b3"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "In the architecture ablation on UESTC (Table 2) [2]:\n\n- **Transformer decoder** (the full ACTOR model): FID_test = **0.19±0.00**, Accuracy = **96.2±0.2** [2].\n- **Autoregressive decoder** (“w/ autoreg. decoder”): FID_test = **2.62±0.01**, Accuracy = **88.0±0.5** [2].",
+      "latency_ms": 48421.063,
+      "error_category": null
+    },
+    {
+      "id": "eval-028",
+      "retrieved_chunk_ids": [
+        "c46ecd98-499e-4dff-9343-af1d3ad6a173",
+        "4660d67a-22b4-47fc-9241-19d139e9a3c5",
+        "855bf099-49ae-4ca2-8f7d-891083cf37cd",
+        "40f1e291-8b97-4224-b259-b8551f6513bf",
+        "638b2dfa-ed47-4b07-bd0b-9053f725f3c7",
+        "2d70f06b-a7c3-4b76-9b91-aa1ad5f05ffd",
+        "3e8ba044-7169-42d9-bf89-b4dcb1560d96",
+        "1dd9334a-bcc9-4bf7-bc57-6ef20e4fc662",
+        "99f5b4e3-9a0e-44ef-9a35-d7f4d90be06c",
+        "3fc1768b-abf7-42eb-ae2f-f7bd273b7b7c"
+      ],
+      "predicted_citation_chunk_ids": [
+        "c46ecd98-499e-4dff-9343-af1d3ad6a173"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "For HumanAct12:\n\n- **ACTOR (ours):** FIDtr = 0.12±0.00, Accuracy = 95.5±0.8 [1].\n- **Action2Motion :** FIDtr = 2.46±0.08, Accuracy = 92.3±0.2 [1].",
+      "latency_ms": 8212.588,
+      "error_category": null
+    },
+    {
+      "id": "eval-029",
+      "retrieved_chunk_ids": [
+        "e6ce450b-d0c1-4f23-8d17-a053ea162ef2",
+        "bd14f245-9f96-4803-abf2-040cd88717c2",
+        "87cfe0c1-e535-4ebe-9708-9df34d2b789b",
+        "29559533-4df9-4e31-a9e0-133798be67db",
+        "6075e1cd-1777-4af4-b704-3a85ff0b3c73",
+        "eba0e4a8-4ad2-4740-a157-2717db747987",
+        "be020364-471b-4bb0-bbf7-36f246af925b",
+        "2b1da103-8a25-4785-9d8a-462a0d188917",
+        "b3b13097-3dab-4b39-bd57-bb094bc1acc5",
+        "6d3c53c2-117a-4164-a45b-af0dfeed2d43"
+      ],
+      "predicted_citation_chunk_ids": [],
+      "rejected_unanswerable": true,
+      "answer": "Insufficient evidence in the provided sources.",
+      "latency_ms": 14692.615,
+      "error_category": null
+    },
+    {
+      "id": "eval-030",
+      "retrieved_chunk_ids": [
+        "dc67257a-c683-40d8-8e97-c33818dc54a3",
+        "7454c537-8803-4a96-ab79-4dc733f0042e",
+        "5fc18567-ea26-4912-8ff7-0d96cfba3ecc",
+        "c3091b69-021d-4922-9184-7a50a81775e7",
+        "908e9251-2eab-4bd2-838b-dac53be5a22e",
+        "3c701705-dc7c-4c08-b4c4-0b9497768385",
+        "2892aa04-dcfa-440b-9066-81a5c070cc90",
+        "5cf97c94-8d99-412d-9a03-36eb37670409",
+        "6075e1cd-1777-4af4-b704-3a85ff0b3c73",
+        "45e0023d-8f26-4a62-b875-e49aa8712620"
+      ],
+      "predicted_citation_chunk_ids": [
+        "dc67257a-c683-40d8-8e97-c33818dc54a3",
+        "7454c537-8803-4a96-ab79-4dc733f0042e",
+        "c3091b69-021d-4922-9184-7a50a81775e7",
+        "908e9251-2eab-4bd2-838b-dac53be5a22e"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "The paper reports computation times of 13.61 minutes for AH-CNN-LSTM and 13.09 minutes for AH-CNN-Res-LSTM [1][2][4][5].",
+      "latency_ms": 7947.782,
+      "error_category": null
+    },
+    {
+      "id": "eval-031",
+      "retrieved_chunk_ids": [
+        "141666e4-dc73-4579-afe5-62de65498204",
+        "95d65b8c-8529-4954-8d55-d4d4539e71f4",
+        "2f5cb43a-45bf-478a-bbe7-2f4d6d151d12",
+        "188a76df-ad1d-420c-9423-2b7f2f092614",
+        "cf89610f-9c78-496c-852e-eba335c14955",
+        "7103a1af-2351-4596-b57b-2657b93d7886",
+        "fa3cef5f-3426-4875-b709-7f4403c7352f",
+        "1a975488-3e74-4215-bdf1-4c1f15a52999",
+        "a17ba6bf-d189-4425-aedf-1e32f0470e19",
+        "f18ef722-8e8e-4aec-a828-68f69fd1315f"
+      ],
+      "predicted_citation_chunk_ids": [
+        "141666e4-dc73-4579-afe5-62de65498204",
+        "95d65b8c-8529-4954-8d55-d4d4539e71f4",
+        "188a76df-ad1d-420c-9423-2b7f2f092614",
+        "cf89610f-9c78-496c-852e-eba335c14955"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "Lsimple achieves better sample quality than training on the true variational bound because it is a reweighted objective that changes what the model focuses on, rather than optimizing the exact likelihood bound. Specifically, Lsimple discards the weighting in the true variational bound and down-weights loss terms corresponding to small timesteps t. These small-t terms train the network to denoise data with very small amounts of noise, so down-weighting them allows the network to focus on more difficult denoising tasks at larger t terms, which leads to better sample quality [1][5]. The paper explicitly states that this reweighting leads to better sample quality, while training on the true variational bound yields better codelengths, as expected [1][2]. Thus, the simplified objective trades likelihood accuracy for perceptually better samples, and is also the setting where the proposed ε-prediction parameterization performs much better than the baseline μ-prediction (which only works well when trained on the true variational bound) [4].",
+      "latency_ms": 13489.041,
+      "error_category": null
+    },
+    {
+      "id": "eval-032",
+      "retrieved_chunk_ids": [
+        "9f7fe778-ec7f-4e96-b826-c932b2a704f2",
+        "f7f66996-fc07-44ec-9491-1ef5ae8fd644",
+        "e41276e6-1265-4aa6-8542-1966cd6f5808",
+        "a81fac46-25c2-41e2-ab8f-d73eaa51b84a",
+        "64093cd1-9d8e-4110-af18-8d1e9fd7b1cf",
+        "6118615a-cc44-45c6-bdc1-34493c87b99f",
+        "0175eed1-72f2-4e35-b13e-716fd32dd613",
+        "71750a47-08f8-4147-b95d-f4b2d3ca3fb5",
+        "833db756-717c-468e-befb-d54905cc475a",
+        "30e7dfa6-0884-4ed1-87da-794155e1355b"
+      ],
+      "predicted_citation_chunk_ids": [
+        "64093cd1-9d8e-4110-af18-8d1e9fd7b1cf",
+        "6118615a-cc44-45c6-bdc1-34493c87b99f",
+        "0175eed1-72f2-4e35-b13e-716fd32dd613",
+        "71750a47-08f8-4147-b95d-f4b2d3ca3fb5"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "According to the provided sources, EEG2IM obtains **high-level semantics** through knowledge distillation: a pre-trained image model transfers high-level semantic knowledge to the EEG encoder, improving its ability to capture category-specific features [6]. The sources also indicate that EEG2IM uses both time-domain and frequency-domain EEG data, and that combining these with knowledge distillation improves performance [5][6]. The sources do not explicitly describe the exact procedure for obtaining the **low-level semantics**; they only state that low-level features contribute crucial structural and fine-grained details to the generated images [7].\n\nThe ablation results support the multi-level semantics plus FiLM design as follows:\n\n- Using **only high-level features** results in a lower Inception Score and higher FID than using **both high-level and low-level features**, showing that low-level features add important structural and fine-grained information [7].\n- Adding **FiLM modulation** on top of the high-level + low-level feature fusion yields the highest IS and lowest FID, demonstrating that FiLM effectively guides the diffusion model to generate more coherent and detailed images [7][8].",
+      "latency_ms": 19802.576,
+      "error_category": null
+    },
+    {
+      "id": "eval-033",
+      "retrieved_chunk_ids": [
+        "2e46ffd8-cc48-4e75-a493-754472bbdb8a",
+        "19104d27-e5cc-4996-91e9-bd6aa47102fd",
+        "c90faf90-2165-46d0-9520-8e694cb8fca0",
+        "c6660832-b501-4260-848b-c7b260a5c532",
+        "d34ba575-c3ae-47aa-a2dd-ecf9b21e2d69",
+        "0f8f8d42-d30d-4d95-99cb-d0a43f8f71bf",
+        "ad4ed573-f377-4a81-ac14-24ab23c5d60c",
+        "fb807e7c-7cce-4409-8683-dfd80709db88",
+        "dd8cb239-d1fb-4f9c-a070-a032e26b7102",
+        "2ffbe899-42e5-44f8-b3a8-cf645c514b70"
+      ],
+      "predicted_citation_chunk_ids": [
+        "2e46ffd8-cc48-4e75-a493-754472bbdb8a",
+        "19104d27-e5cc-4996-91e9-bd6aa47102fd",
+        "c90faf90-2165-46d0-9520-8e694cb8fca0",
+        "c6660832-b501-4260-848b-c7b260a5c532",
+        "0f8f8d42-d30d-4d95-99cb-d0a43f8f71bf",
+        "ad4ed573-f377-4a81-ac14-24ab23c5d60c",
+        "fb807e7c-7cce-4409-8683-dfd80709db88"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "LMM addresses inconsistent data formats by first consolidating heterogeneous motion datasets into a unified dataset, MotionVerse, and aligning all motion data to a unified intermediate format while converting condition signals into token sequences that are closer in feature space [6][7]. To resolve format inconsistency specifically, LMM introduces a body part-aware motion generation model that divides the human body into 10 segments and decomposes motion data from different datasets into relatively independent segments, allowing the model to leverage knowledge across datasets [1].\n\nBuilding on this foundation, LMM’s architecture enables handling missing body parts and multimodal conditions through its specialized attention mechanism, ArtAttention. ArtAttention incorporates multi-conditioning, spatial-temporal independence, and mask injection, which allows distinct control over different body parts and explicitly supports allowance for missing body parts [1][8]. The mask injection capability is further strengthened during training: LMM applies random masks to sequences and body parts in various ways, improving control over the continuity of body part movements and robustness to varying frame rates [2]. This lets the model handle scenarios where entire body parts are missing, although its intermediate representation struggles with cases where only individual keypoints within a body part are missing [4]. Finally, LMM’s multi-conditioning design enables it to process multi-modal inputs simultaneously, allowing it to handle multimodal conditions and even accomplish unseen tasks [3][8].",
+      "latency_ms": 12130.541,
+      "error_category": null
+    },
+    {
+      "id": "eval-034",
+      "retrieved_chunk_ids": [
+        "dfd2ee55-c301-4dae-9706-81ff1388c01e",
+        "20ca484b-96ce-4857-8379-67c83c26a151",
+        "51d259ad-6773-4e92-a15e-36fbbd1e2f69",
+        "e698b8b3-ce26-434d-8660-90e4a2681ac6",
+        "c6660832-b501-4260-848b-c7b260a5c532",
+        "650f1356-ac36-42fd-ad21-b9cffe886b04",
+        "095cebc2-a286-4878-b3dc-1b1e1171ff3c",
+        "78b6c359-26a6-4d22-9628-9abade3149de",
+        "d88abe42-1d07-4cae-b0fc-b979f84b3111",
+        "eb234705-972b-4b0b-b9ab-c42896fc47cd"
+      ],
+      "predicted_citation_chunk_ids": [
+        "dfd2ee55-c301-4dae-9706-81ff1388c01e",
+        "650f1356-ac36-42fd-ad21-b9cffe886b04"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "The paper argues that LMM-Tiny underperforms FineMoGen on HumanML3D because LMM-Tiny, despite sharing a similar structure with FineMoGen, faces significant challenges from the large amounts of diverse data and the tradeoffs across different tasks during model training—challenges that are especially hard for smaller models [1]. Additionally, the paper notes that while HumanML3D uses a representation dimension of 263, LMM uses 669, which significantly increases the learning difficulty for LMM-Tiny [1]. In contrast, LMM-Large substantially improves and surpasses existing works in accuracy and fidelity while maintaining comparable diversity [1]. The parameter counts also differ greatly: LMM-Tiny has 90M parameters, whereas LMM-Large has 760M parameters [6].",
+      "latency_ms": 12901.611,
+      "error_category": null
+    },
+    {
+      "id": "eval-035",
+      "retrieved_chunk_ids": [
+        "a2252513-c2ca-4134-a1cd-3e4f3f397b54",
+        "d5f3a2c4-8607-4761-8ebf-92eedc3e739a",
+        "1e9d28c2-438f-4a76-bccb-e65f190cd35d",
+        "0d275fd9-77a1-4d54-a474-19457ec46042",
+        "5494afd1-1d31-4f6c-abdc-1e471ff399a7",
+        "e0c535d2-ffaa-4f02-ad45-b2b721a96570",
+        "43bfca5d-c6b9-4853-9b31-c7dfcde4b2cb",
+        "4993913e-b461-481c-881e-1c6ffe11fed0",
+        "08d13061-68ec-4a47-b3ea-2720db529050",
+        "e669bc41-0092-43b7-b52a-b1b842fdca6a"
+      ],
+      "predicted_citation_chunk_ids": [
+        "a2252513-c2ca-4134-a1cd-3e4f3f397b54",
+        "d5f3a2c4-8607-4761-8ebf-92eedc3e739a",
+        "0d275fd9-77a1-4d54-a474-19457ec46042",
+        "5494afd1-1d31-4f6c-abdc-1e471ff399a7",
+        "e0c535d2-ffaa-4f02-ad45-b2b721a96570"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "ACTOR’s sequence-level latent representation and non-autoregressive decoder support variable-length generation and outperform the autoregressive version for several linked reasons:\n\n1. **Sequence-level latent representation instead of frame-level**: ACTOR is described as the first action-conditioned sequence-level embedding, whereas the closest work, Action2Motion, uses an autoregressive approach with a frame-level latent representation. Getting a sequence-level embedding requires pooling the time dimension, and this new combination of Transformers and VAEs significantly improves performance over baselines [6]. A single latent vector represents the whole motion, which allows the decoder to synthesize the full sequence rather than frame-by-frame.\n\n2. **Non-autoregressive, full-sequence decoding with positional encodings**: ACTOR’s novelty is to provide positional encodings to the decoder and output the full sequence at once. This enables generation of variable-length sequences without the common autoregressive problems of regressing to the mean pose and drift [5]. At generation time, the duration is controlled by specifying a sequence of positional encodings to the decoder, so different durations can be synthesized and this also trivially increases diversity [4]. The ablation study confirms that this sequence-level decoding strategy is key: the Transformer with sequence-level decoding outperforms an autoregressive Transformer decoder [1].\n\n3. **Avoiding the teacher-forcing train/test gap**: The autoregressive version uses teacher forcing at training time, i.e., feeding the ground-truth pose for the previous frame. This creates a gap at test time, where the model produced poor autoencoding reconstructions—for example, decoding a left-hand waving encoding into a right-hand waving motion [2]. The non-autoregressive, sequence-level approach avoids this error-accumulation and train/test mismatch, which contributes to its better performance in the ablation study [1][2].\n\nIn the ablation study, the full Transformer model outperforms both fully-connected and GRU encoder-decoder architectures by a large margin, and the sequence-level decoding strategy is specifically shown to be key to the improvement over the autoregressive Transformer variant [1].",
+      "latency_ms": 15196.017,
+      "error_category": null
+    },
+    {
+      "id": "eval-036",
+      "retrieved_chunk_ids": [
+        "4993913e-b461-481c-881e-1c6ffe11fed0",
+        "08d13061-68ec-4a47-b3ea-2720db529050",
+        "43bfca5d-c6b9-4853-9b31-c7dfcde4b2cb",
+        "b5d658e5-5e83-4031-8cfb-d8b827e48005",
+        "36b5554f-5290-44ee-9f5d-e2a6e4a81ff7",
+        "afc6c089-f161-4d3a-8cbb-03c7cf6dc8be",
+        "3360e312-b004-4977-86a3-f2eb51c168eb",
+        "ca6f2abb-511c-435c-adc8-2907280327c9",
+        "69fd6d72-b9b5-4253-9eec-5006317ee0cf",
+        "2fb52d13-ea01-4f7c-84c2-a57d409dd764"
+      ],
+      "predicted_citation_chunk_ids": [],
+      "rejected_unanswerable": true,
+      "answer": "Insufficient evidence in the provided sources.",
+      "latency_ms": 11093.06,
+      "error_category": null
+    },
+    {
+      "id": "eval-037",
+      "retrieved_chunk_ids": [
+        "2b1da103-8a25-4785-9d8a-462a0d188917",
+        "b3b13097-3dab-4b39-bd57-bb094bc1acc5",
+        "6d3c53c2-117a-4164-a45b-af0dfeed2d43",
+        "94bfbdf5-bfd5-48c5-8bc2-e055ec83b393",
+        "3042edd7-d593-48d0-b77a-cba86a7ea959",
+        "182c8889-49bf-479c-97ad-a4795b51b31d",
+        "87d6eac4-4387-40b0-8fb8-e29f40afe4ef",
+        "5011805c-6089-4405-84f6-603588259c45",
+        "ac167dce-259b-49bf-8a9c-4720d7f52cd3",
+        "939940cb-710a-40cb-84cf-a775280c62b7"
+      ],
+      "predicted_citation_chunk_ids": [
+        "2b1da103-8a25-4785-9d8a-462a0d188917",
+        "b3b13097-3dab-4b39-bd57-bb094bc1acc5",
+        "3042edd7-d593-48d0-b77a-cba86a7ea959",
+        "182c8889-49bf-479c-97ad-a4795b51b31d"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "The paper proposes a two-stage multimodal pipeline for human motion intention prediction:\n\n- **Stage 1 (EEG/EMG branch):** EEG/EMG signals are converted into spectrogram images, which are fed into an AH-CNN-LSTM network for motion intention prediction [1]. In this branch, IYSGA tunes the CNN and LSTM model parameters [1][5].\n- **Stage 2 (sensor branch):** Sensor measurement data are used as input to an AH-CNN-Res-LSTM network for human motion intention prediction [1][6]. In this branch, IYSGA tunes parameters such as the number of epoch counts and hidden neuron count in the CNN and Res-LSTM models [2][6].\n\nIn both branches, IYSGA optimizes the models to **maximize the Matthews Correlation Coefficient (MCC)** and **reduce the False Discovery Rate (FDR)** [1][5][6]. Specifically, in the AH-CNN-LSTM branch it tunes the CNN and LSTM parameters for this objective [1][5], and in the AH-CNN-Res-LSTM branch it tunes the CNN and Res-LSTM parameters (e.g., epoch and hidden neuron counts) to improve MCC and decrease FDR [2][6].",
+      "latency_ms": 13077.476,
+      "error_category": null
+    },
+    {
+      "id": "eval-038",
+      "retrieved_chunk_ids": [
+        "317291c4-0d13-416e-9bae-673e38b678c9",
+        "8ce95542-837a-4008-9f0f-cc7648fbb8eb",
+        "b9699892-9e14-402b-8b7d-d197aa61648a",
+        "3c3459ab-bb02-4120-9b0a-dbb8ddff4406",
+        "19290c54-cc62-40ce-b332-ac258e9f5896",
+        "b9184893-4cc7-4cda-9037-4f827084e539",
+        "216f6911-a1b7-4cf4-8ca0-adea00444ce3",
+        "4939bc01-f12c-4be4-a52f-c17ac91740a0",
+        "d81d6e0d-7ef4-476b-a5b7-1eb5a029c6bb",
+        "dce30d84-4f12-4623-9423-6cfc6fbdc509"
+      ],
+      "predicted_citation_chunk_ids": [
+        "317291c4-0d13-416e-9bae-673e38b678c9",
+        "8ce95542-837a-4008-9f0f-cc7648fbb8eb",
+        "b9699892-9e14-402b-8b7d-d197aa61648a",
+        "3c3459ab-bb02-4120-9b0a-dbb8ddff4406",
+        "19290c54-cc62-40ce-b332-ac258e9f5896",
+        "b9184893-4cc7-4cda-9037-4f827084e539"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "The writing guide explains the mirror relationship by describing the overall structure as symmetrical, with many elements of the Introduction recurring in the Discussion/Conclusion in approximately reverse order [3][4]. Specifically, the Introduction moves from a broad, general focus toward the narrower “report” section, while the Discussion/Conclusion moves away from that narrow section back to a wider, more general focus [3][6]. It also notes that the Introduction needs an opening sentence to “get in,” and the Discussion/Conclusion needs a way to “get out”; similarly, the end of the Introduction creates an interface with the central report section, and the Discussion/Conclusion reverses that interface as it moves out of the central section [2][4]. In addition, the Introduction locates a gap or problem in existing research, and the Discussion/Conclusion is expected to state to what extent that gap has been responded to or the problem solved [1]. Finally, while the Introduction gives a picture of the current research map, the Discussion/Conclusion shows how and where the study fits into that map and how it changes or affects it [5].",
+      "latency_ms": 10813.641,
+      "error_category": null
+    },
+    {
+      "id": "eval-039",
+      "retrieved_chunk_ids": [
+        "acf753ba-f023-471d-9f23-9925359a3753",
+        "9f079d90-5496-44e1-aad5-2f7f6b21e0ec",
+        "a97dce0d-b2ca-4e87-8c8a-93df998698b6",
+        "bdf088ac-6224-44f3-a85d-de25221b7863",
+        "78952240-ee08-49fa-8dc2-a08c936900bd",
+        "aaba16ff-074d-4a40-b0d3-32a7d2cd3dda",
+        "39130e3b-939c-4e16-994e-32f7857e9aed",
+        "c78c68c9-5fa0-4e22-8136-023f7487bc9f",
+        "47f0fa39-5aba-4602-8941-ebc45bfcf7b9",
+        "8e164f80-ce44-4e96-9696-2ef7be5eb1f0"
+      ],
+      "predicted_citation_chunk_ids": [
+        "9f079d90-5496-44e1-aad5-2f7f6b21e0ec",
+        "a97dce0d-b2ca-4e87-8c8a-93df998698b6",
+        "78952240-ee08-49fa-8dc2-a08c936900bd"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "The key difference is in the level and richness of the conditioning signal:\n\n- Traditional DDPM-based EEG-to-image methods are **category-driven**: they condition generation on high-level semantic information such as object categories [5]. Earlier approaches using DDPMs were used for category-level image generation [5].\n\n- EEG2IM instead conditions the diffusion model on **multi-level EEG semantic features**: it combines high-level semantic features (e.g., object categories) with low-level features that capture fine-grained attributes such as color and contour [2][3]. These multi-level features are injected into the diffusion model via Feature-wise Linear Modulation (FiLM), allowing both semantic consistency and fine details to be preserved [3].\n\nThus, while DDPMs typically use only high-level category information as conditioning, EEG2IM fundamentally conditions on both high-level semantics and low-level fine-grained attributes to generate more detailed images [2][3][5].",
+      "latency_ms": 12767.399,
+      "error_category": null
+    },
+    {
+      "id": "eval-040",
+      "retrieved_chunk_ids": [
+        "d34ba575-c3ae-47aa-a2dd-ecf9b21e2d69",
+        "0f8f8d42-d30d-4d95-99cb-d0a43f8f71bf",
+        "2e46ffd8-cc48-4e75-a493-754472bbdb8a",
+        "19104d27-e5cc-4996-91e9-bd6aa47102fd",
+        "c90faf90-2165-46d0-9520-8e694cb8fca0",
+        "ad4ed573-f377-4a81-ac14-24ab23c5d60c",
+        "608378fc-588d-4f4d-b786-e12623269205",
+        "70611235-39d6-47fb-a675-d1eb308cbcf9",
+        "9ce2ff62-ddad-4b6d-bf53-01d49393bd60",
+        "ac35bcfe-00e0-4fb9-94fc-d8d596a76f82"
+      ],
+      "predicted_citation_chunk_ids": [],
+      "rejected_unanswerable": true,
+      "answer": "Insufficient evidence in the provided sources.",
+      "latency_ms": 7523.584,
+      "error_category": null
+    },
+    {
+      "id": "eval-041",
+      "retrieved_chunk_ids": [
+        "d6e17b7c-2980-46c5-93ff-a4ce7d8ffa9f",
+        "f042c88e-81ae-4ace-9424-ce24d58ff2f7",
+        "45036225-71ca-4991-b377-f65de263ae9b",
+        "911df646-9853-44f7-a5f5-9f670a5d2b39",
+        "12980711-d126-4de8-b8f8-6955bc8f7e91",
+        "2534d229-28cd-4d40-9faa-192de87e4823",
+        "5809782e-a4c4-4d09-a8bd-46002c79b787",
+        "f67bffbc-db91-4e03-813a-18bc66c90403",
+        "409c8a4b-b35e-422a-98e7-32b9c52d08b5",
+        "50de2d04-dfb8-4032-8d7a-4aaa502f9a31"
+      ],
+      "predicted_citation_chunk_ids": [],
+      "rejected_unanswerable": true,
+      "answer": "Insufficient evidence in the provided sources.",
+      "latency_ms": 9257.635,
+      "error_category": null
+    },
+    {
+      "id": "eval-042",
+      "retrieved_chunk_ids": [
+        "70611235-39d6-47fb-a675-d1eb308cbcf9",
+        "74031156-1315-481a-9ce8-fe8bd233f35c",
+        "c8af02d7-af72-42d8-a322-e6a68ccb8242",
+        "20ca484b-96ce-4857-8379-67c83c26a151",
+        "d34ba575-c3ae-47aa-a2dd-ecf9b21e2d69",
+        "0f8f8d42-d30d-4d95-99cb-d0a43f8f71bf",
+        "ecf73388-e2b3-4d28-99cf-9c4ed40fa604",
+        "6049f022-74ed-4c59-97dc-17c5d16be9e5",
+        "390fd8c0-5c25-4915-919c-58485ced6bb7",
+        "ad4ed573-f377-4a81-ac14-24ab23c5d60c"
+      ],
+      "predicted_citation_chunk_ids": [
+        "74031156-1315-481a-9ce8-fe8bd233f35c",
+        "c8af02d7-af72-42d8-a322-e6a68ccb8242",
+        "20ca484b-96ce-4857-8379-67c83c26a151",
+        "ecf73388-e2b3-4d28-99cf-9c4ed40fa604",
+        "6049f022-74ed-4c59-97dc-17c5d16be9e5"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "From the LMM paper’s reported table on UESTC action-to-motion:\n\n- **ACTOR**: UESTC FID = **23.43±2.20** [2]\n- **LMM-Tiny**: UESTC FID = **20.16±1.78** [7]\n- **LMM-Small**: UESTC FID = **14.28±1.14** [3]\n- **LMM-Base**: UESTC FID = **10.36±0.60** [8]\n\nThe LMM-Large model is described as achieving the best FID and Accuracy in the action-conditioned task, but its numeric UESTC FID is not present in the provided sources [4].\n\n**Comparison caveat:** For the action-to-motion task, higher diversity and multimodality—which LMM tends to exhibit due to exposure to more data—do **not necessarily indicate better performance** [4]. Therefore, when comparing LMM against ACTOR, one should not interpret larger diversity/multimodality values as an automatic advantage.",
+      "latency_ms": 25200.195,
+      "error_category": null
+    },
+    {
+      "id": "eval-043",
+      "retrieved_chunk_ids": [
+        "2e46ffd8-cc48-4e75-a493-754472bbdb8a",
+        "19104d27-e5cc-4996-91e9-bd6aa47102fd",
+        "c90faf90-2165-46d0-9520-8e694cb8fca0",
+        "d34ba575-c3ae-47aa-a2dd-ecf9b21e2d69",
+        "0f8f8d42-d30d-4d95-99cb-d0a43f8f71bf",
+        "eebf8583-f2d1-4650-b04f-c01ba78f2f81",
+        "c6660832-b501-4260-848b-c7b260a5c532",
+        "ad4ed573-f377-4a81-ac14-24ab23c5d60c",
+        "9ca6b24e-ec20-4f0f-ba54-6ae98368f6a5",
+        "439218f6-376a-4ad4-8d55-2fac651465e7"
+      ],
+      "predicted_citation_chunk_ids": [],
+      "rejected_unanswerable": true,
+      "answer": "Insufficient evidence in the provided sources.",
+      "latency_ms": 17640.385,
+      "error_category": null
+    },
+    {
+      "id": "eval-044",
+      "retrieved_chunk_ids": [
+        "7024bc36-8c8d-4a03-803a-dbef97c5eb11",
+        "475f9ec3-933a-4325-8e4d-945a2c7c2d55",
+        "a872bbff-dfc3-46e8-af57-0ca89a19fc2d",
+        "a68cb8e3-d3c9-45c7-bb49-047f29ce9170",
+        "32d29fa7-5999-480b-9116-c78a467b37c7",
+        "bb8720df-dd91-4031-9c9f-36c12335e327",
+        "886e9ec9-d5e5-4d0c-a516-41fb9cc646e8",
+        "7c8f271d-b44e-4c1f-81ad-dca07c48ecb6",
+        "1c36da39-7ee4-4dd0-8034-cd5b1ba0691c",
+        "c05c6fa5-f54e-4bd1-984d-ae423ec5907d"
+      ],
+      "predicted_citation_chunk_ids": [],
+      "rejected_unanswerable": true,
+      "answer": "Insufficient evidence in the provided sources.",
+      "latency_ms": 8730.825,
+      "error_category": null
+    },
+    {
+      "id": "eval-045",
+      "retrieved_chunk_ids": [
+        "5810e93e-682f-4775-aac6-81a51a911c45",
+        "d6e8c15e-b049-409c-bc8b-1799b6e1a86b",
+        "26fa2f6e-f2c7-406c-930a-a8efbad4a5a5",
+        "457ec939-f27c-489d-976a-c1ebb8a3d7dc",
+        "c6a18e24-9ae0-4717-be54-7bb02922a954",
+        "497b64d8-c207-4290-9fd7-4bc83390c3a1",
+        "98778e31-ad43-4b42-bf3a-6963718ce16c",
+        "c8e09c11-cf1e-4b76-a86d-d864d518c5b6",
+        "fccd0b88-437a-406b-bf2c-d4389d1c07dc",
+        "0633de54-d9f7-455c-b89a-5e215620eacb"
+      ],
+      "predicted_citation_chunk_ids": [],
+      "rejected_unanswerable": true,
+      "answer": "Insufficient evidence in the provided sources.",
+      "latency_ms": 8709.653,
+      "error_category": null
+    },
+    {
+      "id": "eval-046",
+      "retrieved_chunk_ids": [
+        "2e46ffd8-cc48-4e75-a493-754472bbdb8a",
+        "19104d27-e5cc-4996-91e9-bd6aa47102fd",
+        "c90faf90-2165-46d0-9520-8e694cb8fca0",
+        "acf753ba-f023-471d-9f23-9925359a3753",
+        "bdf088ac-6224-44f3-a85d-de25221b7863",
+        "78952240-ee08-49fa-8dc2-a08c936900bd",
+        "aaba16ff-074d-4a40-b0d3-32a7d2cd3dda",
+        "39130e3b-939c-4e16-994e-32f7857e9aed",
+        "c78c68c9-5fa0-4e22-8136-023f7487bc9f",
+        "47f0fa39-5aba-4602-8941-ebc45bfcf7b9"
+      ],
+      "predicted_citation_chunk_ids": [],
+      "rejected_unanswerable": true,
+      "answer": "Insufficient evidence in the provided sources.",
+      "latency_ms": 13652.605,
+      "error_category": null
+    },
+    {
+      "id": "eval-047",
+      "retrieved_chunk_ids": [
+        "28286f01-32c0-42e7-8915-a018abab703e",
+        "7103a1af-2351-4596-b57b-2657b93d7886",
+        "cf89610f-9c78-496c-852e-eba335c14955",
+        "188a76df-ad1d-420c-9423-2b7f2f092614",
+        "95d65b8c-8529-4954-8d55-d4d4539e71f4",
+        "141666e4-dc73-4579-afe5-62de65498204",
+        "c9ef4b63-ed08-40ed-97c3-52224d69702e",
+        "18be1b05-b54e-4154-8ae2-dc5307d7015b",
+        "1a975488-3e74-4215-bdf1-4c1f15a52999",
+        "2f5cb43a-45bf-478a-bbe7-2f4d6d151d12"
+      ],
+      "predicted_citation_chunk_ids": [
+        "141666e4-dc73-4579-afe5-62de65498204",
+        "c9ef4b63-ed08-40ed-97c3-52224d69702e"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "**What is L_simple in DDPM?**\n\nL_simple is the simplified training objective proposed in the paper, defined as [6]:\n\nL_simple(θ) := E_{t, x0, ε} [ || ε − ε_θ(√(ᾱ_t) x0 + √(1 − ᾱ_t) ε, t) ||² ]\n\nIt is a simplified, unweighted variant of the variational bound. Compared to the standard variational bound, it discards the weighting in the original objective and instead predicts the noise ε directly, given a noisy image and the timestep t [6, 7].\n\n**Why does it achieve better sample quality?**\n\nThe simplified objective achieves better sample quality for two related reasons:\n\n1. **It down-weights easy denoising tasks.** The simplified objective causes loss terms corresponding to small t (i.e., denoising data with very small amounts of noise) to be down-weighted. Since these are relatively easy tasks, down-weighting them allows the network to focus on the more difficult denoising tasks at larger t terms. This reweighting leads to better sample quality [7].\n\n2. **Empirical findings show a trade-off.** The authors found that training on the true variational bound yields better codelengths (negative log-likelihood), but the simplified objective yields the best sample quality [4, 5]. In ablation experiments (Table 2), predicting ε with the simplified objective (L_simple) significantly outperformed other parameterizations and objectives in terms of FID score [6].",
+      "latency_ms": 31102.344,
+      "error_category": null
+    },
+    {
+      "id": "eval-048",
+      "retrieved_chunk_ids": [
+        "9f7fe778-ec7f-4e96-b826-c932b2a704f2",
+        "f7f66996-fc07-44ec-9491-1ef5ae8fd644",
+        "e41276e6-1265-4aa6-8542-1966cd6f5808",
+        "a81fac46-25c2-41e2-ab8f-d73eaa51b84a",
+        "64093cd1-9d8e-4110-af18-8d1e9fd7b1cf",
+        "6118615a-cc44-45c6-bdc1-34493c87b99f",
+        "16467ee6-dee1-4664-8823-173e8f391384",
+        "549652d2-602b-4ca6-b315-76612719d224",
+        "9fbea85b-6a95-4af7-a6e2-ee11e2cb5eba",
+        "b1875ea6-3e26-411c-80ab-1d2fe7548ba1"
+      ],
+      "predicted_citation_chunk_ids": [],
+      "rejected_unanswerable": true,
+      "answer": "Insufficient evidence in the provided sources.",
+      "latency_ms": 21546.771,
+      "error_category": null
+    },
+    {
+      "id": "eval-049",
+      "retrieved_chunk_ids": [
+        "11f5c28b-7007-41a3-ad84-4d62cd66b9cc",
+        "142b9edd-52e8-461e-bc21-3fb4d1cbd4b0",
+        "2e46ffd8-cc48-4e75-a493-754472bbdb8a",
+        "19104d27-e5cc-4996-91e9-bd6aa47102fd",
+        "c90faf90-2165-46d0-9520-8e694cb8fca0",
+        "5dda424d-bd69-4009-91df-af14ed3816f9",
+        "a32fb18c-bccd-4c2e-bb2c-d398de7d9b24",
+        "6b1be6bb-134c-4cbc-bd1a-da4c3823838a",
+        "7a1fc74a-7b58-44eb-a643-07a9dd320d47",
+        "2ffbe899-42e5-44f8-b3a8-cf645c514b70"
+      ],
+      "predicted_citation_chunk_ids": [
+        "142b9edd-52e8-461e-bc21-3fb4d1cbd4b0",
+        "2e46ffd8-cc48-4e75-a493-754472bbdb8a",
+        "19104d27-e5cc-4996-91e9-bd6aa47102fd",
+        "5dda424d-bd69-4009-91df-af14ed3816f9"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "是的，根据提供的来源，MotionVerse 确实需要解决不同数据集在运动表示格式、关键点数量/身体部位是否存在以及帧率等方面的不一致问题，但来源并未用“最大问题”这一表述，而是将其作为构建统一基准所面临的挑战之一。例如，来源指出需要“align the diverse formats of motion data”[2]，并在统一格式中“annotations indicating which body parts are present in each sequence”以应对不同数据集身体部位缺失的情况[2]；同时，在模型训练中采用了“random frame rate augmentation”来增强对不同帧率的鲁棒性[4]，说明帧率差异也是处理对象。\n\n具体处理方式如下：\n\n1. **统一中间表示（TOMATO）**：先将所有运动序列转换为 TOMATO 表示，并进一步将整个人体分成 10 个独立身体部分，作为统一的运动表示；同时保留“哪些身体部分存在”的注释，以解决不同数据集关键点数量不一致（尤其是某些身体部分缺失）的问题[2][6]。\n\n2. **训练表示转换器**：在测试阶段，训练一系列表示转换器，将统一的 TOMATO 表示转换回各个数据集各自特定的运动表示，从而在训练时能够混合使用不同格式的数据源[2]。\n\n3. **统一多模态条件信号**：对于文本、音频等多模态条件输入，使用 ImageBind 将它们转换为跨模态的统一特征，以便与运动数据一起输入模型[6]。\n\n4. **模型层面的处理**：在大规模运动模型（LMM）中，采用身体部位感知的生成模型，将人体分成 10 段，并通过 ArtAttention 机制（支持多条件、时空独立性、掩码注入）对不同身体部位进行独立控制，从而利用来自不同数据集的知识[3]。在训练中，通过随机帧率增强来适应帧率不一致，并通过随机掩码来增强对身体部位运动连续性的控制[4]。\n\n综合这些步骤，MotionVerse 从数据预处理（TOMATO 统一表示 + 转换器）、条件信号统一（ImageBind）以及模型训练（身体部位感知 + 帧率/掩码增强）三个层面来处理这些不一致性。",
+      "latency_ms": 36414.148,
+      "error_category": null
+    },
+    {
+      "id": "eval-050",
+      "retrieved_chunk_ids": [
+        "21ea25df-21a4-4a2d-9f33-c542ac34c074",
+        "a2252513-c2ca-4134-a1cd-3e4f3f397b54",
+        "d5f3a2c4-8607-4761-8ebf-92eedc3e739a",
+        "5494afd1-1d31-4f6c-abdc-1e471ff399a7",
+        "e0c535d2-ffaa-4f02-ad45-b2b721a96570",
+        "29b40ae0-9ed4-4ddf-9a93-300efff5a69b",
+        "feeaa935-803b-49f6-8a95-d8cf79d426f1",
+        "d61dbab5-0762-4130-8771-783815ddd18a",
+        "99286bf3-a927-4ea7-bf2e-225fc13baa8b",
+        "3fcc88ab-f45c-43a7-b7bc-67e34dbe14d3"
+      ],
+      "predicted_citation_chunk_ids": [
+        "21ea25df-21a4-4a2d-9f33-c542ac34c074",
+        "a2252513-c2ca-4134-a1cd-3e4f3f397b54",
+        "d5f3a2c4-8607-4761-8ebf-92eedc3e739a",
+        "5494afd1-1d31-4f6c-abdc-1e471ff399a7"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "ACTOR avoids autoregressive decoding because autoregressive approaches regress to the mean pose after some time and are subject to drift [4]. In addition, an autoregressive Transformer decoder that uses teacher forcing at training time creates a gap with test time, leading to poor autoencoding reconstructions [2][3]. Instead, ACTOR’s decoder outputs the full sequence at once from the single latent vector [1], and this sequence-level decoding strategy is key to obtaining an improvement with Transformers [2].",
+      "latency_ms": 20817.097,
+      "error_category": null
+    },
+    {
+      "id": "eval-051",
+      "retrieved_chunk_ids": [
+        "2b1da103-8a25-4785-9d8a-462a0d188917",
+        "b3b13097-3dab-4b39-bd57-bb094bc1acc5",
+        "6d3c53c2-117a-4164-a45b-af0dfeed2d43",
+        "94bfbdf5-bfd5-48c5-8bc2-e055ec83b393",
+        "3989232f-6aaa-4140-8e8b-9b75a4a1a2a9",
+        "6e6a0143-ba58-4a52-975d-2909e3334625",
+        "cad45a0a-ff72-4b71-93f6-7755b411293c",
+        "20dc87fe-68e0-44d7-80e5-4cb6c903f9a3",
+        "d6e17b7c-2980-46c5-93ff-a4ce7d8ffa9f",
+        "f042c88e-81ae-4ace-9424-ce24d58ff2f7"
+      ],
+      "predicted_citation_chunk_ids": [
+        "3989232f-6aaa-4140-8e8b-9b75a4a1a2a9"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "In the signal branch, the first transformation applied is converting the EEG/EMG signals into spectrogram images [5]. These spectrogram images are then used as input to the AH-CNN-LSTM framework [5].",
+      "latency_ms": 17902.302,
+      "error_category": null
+    },
+    {
+      "id": "eval-052",
+      "retrieved_chunk_ids": [
+        "b9699892-9e14-402b-8b7d-d197aa61648a",
+        "3c3459ab-bb02-4120-9b0a-dbb8ddff4406",
+        "32c33258-4ca4-40c2-ae2e-b4c2604cf499",
+        "b9184893-4cc7-4cda-9037-4f827084e539",
+        "2814d9f6-a7c9-4df7-9f3b-98d847059282",
+        "19290c54-cc62-40ce-b332-ac258e9f5896",
+        "317291c4-0d13-416e-9bae-673e38b678c9",
+        "8ce95542-837a-4008-9f0f-cc7648fbb8eb",
+        "60aa8f4f-9786-4d06-83bf-8bd0c5b4f185",
+        "d2d8da5d-fb9f-4e65-94f8-71261e781c6f"
+      ],
+      "predicted_citation_chunk_ids": [
+        "b9699892-9e14-402b-8b7d-d197aa61648a",
+        "3c3459ab-bb02-4120-9b0a-dbb8ddff4406",
+        "32c33258-4ca4-40c2-ae2e-b4c2604cf499",
+        "b9184893-4cc7-4cda-9037-4f827084e539",
+        "317291c4-0d13-416e-9bae-673e38b678c9",
+        "8ce95542-837a-4008-9f0f-cc7648fbb8eb"
+      ],
+      "rejected_unanswerable": false,
+      "answer": "The Discussion has a structural relationship to the Introduction that is essentially symmetrical and reverse-ordered: **many elements of the Introduction occur again in the Discussion/Conclusion in approximately reverse order** [1][2]. The Introduction moves from a broad, general focus into the narrower \"report\" section, while the Discussion/Conclusion moves away from that narrow section back to a wider, more general focus [1][2][4]. The Discussion looks back at the points made in the Introduction on the basis of the information in the central report section [3]. It revisits the research map and the gap or problem described in the Introduction, and shows how the study responds to that gap or solves that problem [7]. The end of the Introduction creates an interface with the present paper to move the reader into the central report; the Discussion reverses this by beginning with revisiting some aspect of the work to move the reader away from the central report [8].",
+      "latency_ms": 17555.148,
+      "error_category": null
+    },
+    {
+      "id": "eval-053",
+      "retrieved_chunk_ids": [
+        "141666e4-dc73-4579-afe5-62de65498204",
+        "9a41d985-77a3-4755-b20f-fb37adf219d6",
+        "f37714f4-375a-4adc-8b86-dfa22b6658cb",
+        "95d65b8c-8529-4954-8d55-d4d4539e71f4",
+        "33513f3e-08b4-4209-b760-2081fa929d00",
+        "9c6871fe-79af-4d1e-86cd-4e359af91c1d",
+        "8ae02ce3-2931-4818-bd5f-928bd55093c5",
+        "28286f01-32c0-42e7-8915-a018abab703e",
+        "c0962ce9-1453-4eea-a48e-293f075ad17d",
+        "971bea7c-3a27-45f4-b9b4-22ceddec6ab9"
+      ],
+      "predicted_citation_chunk_ids": [],
+      "rejected_unanswerable": true,
+      "answer": "Insufficient evidence in the provided sources.",
+      "latency_ms": 8285.311,
+      "error_category": null
+    },
+    {
+      "id": "eval-054",
+      "retrieved_chunk_ids": [
+        "5f4182e6-e505-478e-b1af-d71fe543e8d7",
+        "de94cad4-90fb-466a-a246-51a55e85b5a9",
+        "8ce192ad-8d3c-439c-a9fb-151e28f7505f",
+        "b0a87fef-63ce-4bad-af32-443fc0276231",
+        "9f7fe778-ec7f-4e96-b826-c932b2a704f2",
+        "833db756-717c-468e-befb-d54905cc475a",
+        "30e7dfa6-0884-4ed1-87da-794155e1355b",
+        "75e6d145-af9e-43de-b2d0-7b29c927f118",
+        "824e0a82-1b95-40c7-83ce-994d5f3847fa",
+        "16467ee6-dee1-4664-8823-173e8f391384"
+      ],
+      "predicted_citation_chunk_ids": [],
+      "rejected_unanswerable": true,
+      "answer": "Insufficient evidence in the provided sources.",
+      "latency_ms": 9297.608,
+      "error_category": null
+    },
+    {
+      "id": "eval-055",
+      "retrieved_chunk_ids": [
+        "20ca484b-96ce-4857-8379-67c83c26a151",
+        "1b6bde46-27cf-4029-8d5b-6ea582ae252e",
+        "c8af02d7-af72-42d8-a322-e6a68ccb8242",
+        "6049f022-74ed-4c59-97dc-17c5d16be9e5",
+        "6496c079-ceb9-4732-bed5-f00b7184ec92",
+        "ecf73388-e2b3-4d28-99cf-9c4ed40fa604",
+        "390fd8c0-5c25-4915-919c-58485ced6bb7",
+        "df231f34-ddc4-434d-9277-54ecaaf023e2",
+        "78b6c359-26a6-4d22-9628-9abade3149de",
+        "a9b774fe-984f-4da2-9a1c-4f8cd447a1ed"
+      ],
+      "predicted_citation_chunk_ids": [],
+      "rejected_unanswerable": true,
+      "answer": "Insufficient evidence in the provided sources.",
+      "latency_ms": 7266.395,
+      "error_category": null
+    },
+    {
+      "id": "eval-056",
+      "retrieved_chunk_ids": [
+        "c46ecd98-499e-4dff-9343-af1d3ad6a173",
+        "4660d67a-22b4-47fc-9241-19d139e9a3c5",
+        "855bf099-49ae-4ca2-8f7d-891083cf37cd",
+        "40f1e291-8b97-4224-b259-b8551f6513bf",
+        "af706288-de62-4d29-b7bb-21ff465cfbae",
+        "638b2dfa-ed47-4b07-bd0b-9053f725f3c7",
+        "2d70f06b-a7c3-4b76-9b91-aa1ad5f05ffd",
+        "43bfca5d-c6b9-4853-9b31-c7dfcde4b2cb",
+        "0d2c15c5-f9f7-471b-900b-a6dd08e73815",
+        "3360e312-b004-4977-86a3-f2eb51c168eb"
+      ],
+      "predicted_citation_chunk_ids": [],
+      "rejected_unanswerable": true,
+      "answer": "Insufficient evidence in the provided sources.",
+      "latency_ms": 8176.469,
+      "error_category": null
+    },
+    {
+      "id": "eval-057",
+      "retrieved_chunk_ids": [
+        "ffdc0cfa-3b52-42a9-8d45-72e8e7787320",
+        "11b56078-0d86-474d-8234-0255d084c24b",
+        "e8248025-8566-4b0b-ab2e-ce74beeebd65",
+        "3989232f-6aaa-4140-8e8b-9b75a4a1a2a9",
+        "6e6a0143-ba58-4a52-975d-2909e3334625",
+        "cad45a0a-ff72-4b71-93f6-7755b411293c",
+        "20dc87fe-68e0-44d7-80e5-4cb6c903f9a3",
+        "45036225-71ca-4991-b377-f65de263ae9b",
+        "b13d8501-ef40-4c5f-9369-9f44fde2e86e",
+        "3bdc8864-ac74-4c7d-8de7-67bde9632fee"
+      ],
+      "predicted_citation_chunk_ids": [],
+      "rejected_unanswerable": true,
+      "answer": "Insufficient evidence in the provided sources.",
+      "latency_ms": 8210.972,
+      "error_category": null
+    },
+    {
+      "id": "eval-058",
+      "retrieved_chunk_ids": [
+        "1fc8ebe7-d88e-4e17-a800-c9d5fecfa006",
+        "cc8dcb27-52ad-44b1-8b61-cec0e01bb427",
+        "da04be76-37d4-4295-8226-b1bf0178d0a6",
+        "b83bbb94-16c9-48d2-b086-d94064935fb0",
+        "1c36da39-7ee4-4dd0-8034-cd5b1ba0691c",
+        "a68cb8e3-d3c9-45c7-bb49-047f29ce9170",
+        "479f8abf-4ad8-4e68-bc03-186cf1e946cd",
+        "7024bc36-8c8d-4a03-803a-dbef97c5eb11",
+        "8e1a2aa4-ea96-479b-862c-2aaa4b1a74c7",
+        "acfd584c-6f6c-4622-88ff-70e74d2ccfa7"
+      ],
+      "predicted_citation_chunk_ids": [],
+      "rejected_unanswerable": true,
+      "answer": "Insufficient evidence in the provided sources.",
+      "latency_ms": 9140.974,
+      "error_category": null
+    },
+    {
+      "id": "eval-059",
+      "retrieved_chunk_ids": [
+        "052630b4-4b79-4e34-8f8b-7f9fe10333a9",
+        "650f1356-ac36-42fd-ad21-b9cffe886b04",
+        "94f6dec7-25dd-47fa-aeb7-678060d6a0cf",
+        "0e8d7ee2-e099-41ec-bd0f-2114dfdebc1d",
+        "9c7d58c3-58fd-4a0a-8cd1-729c3762e725",
+        "f723d367-7ea7-484a-acf9-dd3949dde6fb",
+        "616d1322-dfb8-466b-9836-2d395225bec5",
+        "e42610ca-9ed7-4f02-ad5a-c2066e1e2305",
+        "1a284a52-c620-4cac-9830-7970ee4e6867",
+        "d78f49ab-5178-438c-a3bc-f3e290cd1f6e"
+      ],
+      "predicted_citation_chunk_ids": [],
+      "rejected_unanswerable": true,
+      "answer": "Insufficient evidence in the provided sources.",
+      "latency_ms": 10594.731,
+      "error_category": null
+    },
+    {
+      "id": "eval-060",
+      "retrieved_chunk_ids": [
+        "acf753ba-f023-471d-9f23-9925359a3753",
+        "9f079d90-5496-44e1-aad5-2f7f6b21e0ec",
+        "a97dce0d-b2ca-4e87-8c8a-93df998698b6",
+        "d305ac6c-c8f1-404e-9acb-ae7544c0624a",
+        "01fa7798-18cc-45de-9d77-7b748c9d34b7",
+        "bdf088ac-6224-44f3-a85d-de25221b7863",
+        "78952240-ee08-49fa-8dc2-a08c936900bd",
+        "aaba16ff-074d-4a40-b0d3-32a7d2cd3dda",
+        "39130e3b-939c-4e16-994e-32f7857e9aed",
+        "c78c68c9-5fa0-4e22-8136-023f7487bc9f"
+      ],
+      "predicted_citation_chunk_ids": [],
+      "rejected_unanswerable": true,
+      "answer": "Insufficient evidence in the provided sources.",
+      "latency_ms": 8251.164,
+      "error_category": null
+    }
+  ]
+}

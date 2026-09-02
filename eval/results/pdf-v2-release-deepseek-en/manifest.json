@@ -1,0 +1,53 @@
+{
+  "active_snapshot": {
+    "bm25_reloadable": true,
+    "document_version_count": 6,
+    "faiss_reloadable": true,
+    "id": "2d0e23b3-da8c-4631-aceb-85cf0c656167",
+    "restart_top_k_stable": true
+  },
+  "dataset_sha256": "81602c6737799fc1d24692459d20efdc4c2a81339464cd63e99d5252794cfecc",
+  "git_commit": "27d593ab86a685fc79bfd5718f47392751e9e8fe",
+  "label_freeze": {
+    "answerable": 52,
+    "dev": 42,
+    "index_snapshot_id": "2d0e23b3-da8c-4631-aceb-85cf0c656167",
+    "labels_sha256": "f73fe0bf6d711dca92ee0afe8443440f08005e41b3c8feadeadb58ca7fee7eb7",
+    "resolved_answerable": 52,
+    "test": 18,
+    "total": 60,
+    "unanswerable": 8
+  },
+  "lock_sha256": "a594b1750b286d1c4b0fa6257e3b90244655b83a20088f16194018779c7ee10a",
+  "model_manifest": {
+    "embedding_signature": "c618f141c8be0bc3",
+    "generator_revision": "deepseek-v4-flash",
+    "reranker_revision": "2cfc18c9415c912f9d8155881c133215df768a70"
+  },
+  "parser_manifests": [
+    {
+      "document_key": "ddpm",
+      "parser_signature": "57dbd3cbfa8f3d0fc6cf9ab8a559976633929aab9f412f0f4678eb4294836415"
+    },
+    {
+      "document_key": "eeg2im",
+      "parser_signature": "828cb7561ea1110cbf3bd8a668abc6564d087cd69a6e531f046b95f9a2c32e3e"
+    },
+    {
+      "document_key": "lmm",
+      "parser_signature": "57dbd3cbfa8f3d0fc6cf9ab8a559976633929aab9f412f0f4678eb4294836415"
+    },
+    {
+      "document_key": "motion_intent",
+      "parser_signature": "57dbd3cbfa8f3d0fc6cf9ab8a559976633929aab9f412f0f4678eb4294836415"
+    },
+    {
+      "document_key": "actor",
+      "parser_signature": "57dbd3cbfa8f3d0fc6cf9ab8a559976633929aab9f412f0f4678eb4294836415"
+    },
+    {
+      "document_key": "science_writing",
+      "parser_signature": "828cb7561ea1110cbf3bd8a668abc6564d087cd69a6e531f046b95f9a2c32e3e"
+    }
+  ]
+}
