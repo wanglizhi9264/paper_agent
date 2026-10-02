@@ -92,6 +92,13 @@ def test_label_freeze_fails_before_prediction_if_an_answerable_label_is_missing(
         validate_resolved_dataset(rows)
 
 
+def test_label_freeze_rejects_parser_issue_or_manual_review() -> None:
+    rows = _dataset()
+    rows[0]["evidence_resolution_status"] = "parser_issue"
+    with pytest.raises(ReleaseGateError, match="LABEL_REVIEW_REQUIRED"):
+        validate_resolved_dataset(rows)
+
+
 def test_prediction_runner_is_deterministic_and_requires_one_result_per_question() -> None:
     rows = _dataset()
 

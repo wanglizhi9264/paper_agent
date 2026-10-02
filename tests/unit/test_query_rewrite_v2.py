@@ -17,6 +17,11 @@ class RewriteProvider:
         return LLMResponse(text=self.text)
 
 
+class BrokenRewriteProvider:
+    async def generate(self, _messages: list[LLMMessage], **_kwargs: object) -> LLMResponse:
+        raise RuntimeError("programming bug")
+
+
 @pytest.mark.asyncio
 async def test_eval_048_structured_rewrite_preserves_all_semantic_slots() -> None:
     provider = RewriteProvider(
@@ -74,3 +79,50 @@ async def test_invalid_rewrite_falls_back_to_original_query() -> None:
 
     assert result.rewrite.standalone_query == "original"
     assert result.degraded_reasons == ["REWRITE_FAILED"]
+
+
+@pytest.mark.asyncio
+async def test_cjk_query_can_be_rewritten_to_english_without_history() -> None:
+    provider = RewriteProvider(
+        '{"standalone_query":"DDPM reverse process variance",'
+        '"paper_hints":["DDPM"],"dataset_hints":[],'
+        '"method_hints":[],"metric_hints":[]}'
+    )
+
+    result = await rewrite_query(
+        provider,
+        [],
+        "DDPM 的反向过程方差是什么？",
+        SearchScope(type="all"),
+        language_strategy="english_for_cjk",
+    )
+
+    assert result.rewrite.standalone_query == "DDPM reverse process variance"
+    assert "Write standalone_query in English" in provider.messages[0].content
+
+
+@pytest.mark.asyncio
+async def test_english_query_does_not_call_rewriter_without_history() -> None:
+    provider = RewriteProvider("not used")
+
+    result = await rewrite_query(
+        provider,
+        [],
+        "What is the DDPM reverse process variance?",
+        SearchScope(type="all"),
+        language_strategy="english_for_cjk",
+    )
+
+    assert result.rewrite.standalone_query == "What is the DDPM reverse process variance?"
+    assert provider.messages == []
+
+
+@pytest.mark.asyncio
+async def test_unexpected_rewrite_bug_is_not_hidden_as_fallback() -> None:
+    with pytest.raises(RuntimeError, match="programming bug"):
+        await rewrite_query(
+            BrokenRewriteProvider(),  # type: ignore[arg-type]
+            [("user", "context")],
+            "original",
+            SearchScope(type="all"),
+        )

@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+REFUSAL_PREFIX = "Insufficient evidence in the provided sources."
+
 
 @dataclass
 class Citation:
@@ -53,3 +55,50 @@ def validate_citations(
     valid, invalid = parse_citations(text, citation_map)
     cleaned = strip_invalid_markers(text, invalid)
     return cleaned, valid, invalid
+
+
+def finalize_answer(
+    text: str,
+    citation_map: dict[int, str],
+) -> tuple[str, list[Citation], list[int]]:
+    """Apply the externally visible refusal and citation contract."""
+    cleaned, valid, invalid = validate_citations(text, citation_map)
+    if cleaned.lstrip().casefold().startswith(REFUSAL_PREFIX.casefold()):
+        return REFUSAL_PREFIX, [], invalid
+    return cleaned, valid, invalid
+
+
+class RefusalStreamGate:
+    """Buffer only long enough to decide whether a stream begins with the refusal prefix."""
+
+    def __init__(self) -> None:
+        self._buffer = ""
+        self._mode = "pending"
+
+    def feed(self, value: str) -> str:
+        if not value or self._mode == "refusal":
+            return ""
+        if self._mode == "normal":
+            return value
+        self._buffer += value
+        candidate = self._buffer.lstrip()
+        folded = candidate.casefold()
+        prefix = REFUSAL_PREFIX.casefold()
+        if prefix.startswith(folded):
+            return ""
+        if folded.startswith(prefix):
+            self._mode = "refusal"
+            self._buffer = ""
+            return REFUSAL_PREFIX
+        self._mode = "normal"
+        result = self._buffer
+        self._buffer = ""
+        return result
+
+    def finish(self) -> str:
+        if self._mode != "pending":
+            return ""
+        self._mode = "normal"
+        result = self._buffer
+        self._buffer = ""
+        return result

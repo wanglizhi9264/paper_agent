@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from typing import Any, cast
 
-from app.llm.base import LLMMessage, LLMProvider, LLMResponse, LLMUsage, StreamChunk
+from app.llm.base import LLMError, LLMMessage, LLMProvider, LLMResponse, LLMUsage, StreamChunk
 
 
 class FakeLLMProvider:
@@ -88,28 +88,33 @@ class OpenAICompatibleProvider:
         max_tokens: int | None = None,
         timeout: float | None = None,
     ) -> LLMResponse:
+        import json
+
         import httpx
 
-        payload = self._build_payload(messages, temperature, max_tokens, stream=False)
-        async with httpx.AsyncClient(timeout=timeout or self._timeout) as client:
-            resp = await client.post(
-                f"{self._base_url}/chat/completions",
-                json=payload,
-                headers={"Authorization": f"Bearer {self._api_key}"},
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            choice = data["choices"][0]
-            usage_data = data.get("usage", {})
-            return LLMResponse(
-                text=choice["message"]["content"],
-                usage=LLMUsage(
-                    prompt_tokens=usage_data.get("prompt_tokens", 0),
-                    completion_tokens=usage_data.get("completion_tokens", 0),
-                    total_tokens=usage_data.get("total_tokens", 0),
-                ),
-                finish_reason=choice.get("finish_reason", "stop"),
-            )
+        try:
+            payload = self._build_payload(messages, temperature, max_tokens, stream=False)
+            async with httpx.AsyncClient(timeout=timeout or self._timeout) as client:
+                resp = await client.post(
+                    f"{self._base_url}/chat/completions",
+                    json=payload,
+                    headers={"Authorization": f"Bearer {self._api_key}"},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                choice = data["choices"][0]
+                usage_data = data.get("usage", {})
+                return LLMResponse(
+                    text=choice["message"]["content"],
+                    usage=LLMUsage(
+                        prompt_tokens=usage_data.get("prompt_tokens", 0),
+                        completion_tokens=usage_data.get("completion_tokens", 0),
+                        total_tokens=usage_data.get("total_tokens", 0),
+                    ),
+                    finish_reason=choice.get("finish_reason", "stop"),
+                )
+        except (httpx.HTTPError, json.JSONDecodeError, KeyError, IndexError, TypeError) as exc:
+            raise LLMError("LLM request or response failed", code="LLM_UNAVAILABLE") from exc
 
     async def stream(
         self,
@@ -119,43 +124,46 @@ class OpenAICompatibleProvider:
         max_tokens: int | None = None,
         timeout: float | None = None,
     ) -> AsyncIterator[StreamChunk]:
+        import json
+
         import httpx
 
-        payload = self._build_payload(messages, temperature, max_tokens, stream=True)
-        async with (
-            httpx.AsyncClient(timeout=timeout or self._timeout) as client,
-            client.stream(
-                "POST",
-                f"{self._base_url}/chat/completions",
-                json=payload,
-                headers={"Authorization": f"Bearer {self._api_key}"},
-            ) as resp,
-        ):
-            resp.raise_for_status()
-            async for line in resp.aiter_lines():
-                if not line.startswith("data: "):
-                    continue
-                data_str = line[6:]
-                if data_str.strip() == "[DONE]":
-                    break
-                import json
-
-                chunk_data = json.loads(data_str)
-                choices = chunk_data.get("choices", [])
-                if not choices:
-                    continue
-                delta = choices[0].get("delta", {})
-                text = delta.get("content", "")
-                finish = choices[0].get("finish_reason")
-                usage = None
-                if "usage" in chunk_data:
-                    u = chunk_data["usage"]
-                    usage = LLMUsage(
-                        prompt_tokens=u.get("prompt_tokens", 0),
-                        completion_tokens=u.get("completion_tokens", 0),
-                        total_tokens=u.get("total_tokens", 0),
-                    )
-                yield StreamChunk(text=text, finish_reason=finish, usage=usage)
+        try:
+            payload = self._build_payload(messages, temperature, max_tokens, stream=True)
+            async with (
+                httpx.AsyncClient(timeout=timeout or self._timeout) as client,
+                client.stream(
+                    "POST",
+                    f"{self._base_url}/chat/completions",
+                    json=payload,
+                    headers={"Authorization": f"Bearer {self._api_key}"},
+                ) as resp,
+            ):
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    data_str = line[6:]
+                    if data_str.strip() == "[DONE]":
+                        break
+                    chunk_data = json.loads(data_str)
+                    choices = chunk_data.get("choices", [])
+                    if not choices:
+                        continue
+                    delta = choices[0].get("delta", {})
+                    text = delta.get("content", "")
+                    finish = choices[0].get("finish_reason")
+                    usage = None
+                    if "usage" in chunk_data:
+                        u = chunk_data["usage"]
+                        usage = LLMUsage(
+                            prompt_tokens=u.get("prompt_tokens", 0),
+                            completion_tokens=u.get("completion_tokens", 0),
+                            total_tokens=u.get("total_tokens", 0),
+                        )
+                    yield StreamChunk(text=text, finish_reason=finish, usage=usage)
+        except (httpx.HTTPError, json.JSONDecodeError, KeyError, IndexError, TypeError) as exc:
+            raise LLMError("LLM stream or response failed", code="LLM_UNAVAILABLE") from exc
 
     def _build_payload(
         self,

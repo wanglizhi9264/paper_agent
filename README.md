@@ -1,5 +1,17 @@
 # Paper RAG Assistant
 
+2026-09-04 检索改进切片：新增可选的 cell-coverage 证据选择、候选池配置、阶段诊断，
+以及 chat-only 的两轮有界证据补充工作流；这两项策略默认关闭，并配有 dev-only A/B。
+技术来源、实验命令与论文 Agent 路线见
+[调研与落地记录](docs/retrieval-upgrade-research.md)。这不是完整 Agent 或发布质量门通过声明。
+
+2026-10-02 起，显式多文档 scope 默认启用保守的 document balance：候选池和最终
+Top-K 都为每篇 scoped paper 保留至少一个位置；`all`/`collection` scope 不做配额。
+冻结 benchmark 的公开聚合结果见
+[2026-10-02 全量重跑报告](docs/gold-benchmark-rerun-2026-10-02.md)。
+CJK→英文 chat retrieval rewrite 已完成经授权的 provider A/B；它提高 Recall@10，
+但引用指标略降且延迟增加，因此默认仍保持 `preserve`。
+
 Local-first, single-user paper RAG assistant targeting an NVIDIA RTX 2060 (6 GB) host. See [`docs/spec.md`](docs/spec.md) for the normative specification and [`docs/proposal.md`](docs/proposal.md) for the implementation roadmap.
 
 ## Status
@@ -134,6 +146,15 @@ PAPER_RAG_DATABASE_URL=postgresql+asyncpg://paper_rag:paper_rag_dev@127.0.0.1:54
 ```
 
 ### PDF Ingestion V2 private release gate
+
+For manual review of unresolved private evidence, start the frontend with `npm --prefix frontend run dev`
+and open `http://127.0.0.1:5173/gold-review`. The loopback-only Vite development server
+automatically reads the ignored `benchmark_unresolved.json` and `benchmark_repair_report.json`,
+matches uploaded PDFs by SHA-256, and reads the Document IR for the report's pinned snapshot.
+Missing or inconsistent sources are shown as unavailable; optional manual file selectors remain
+under "替换数据或补充材料". These private files are not bundled into the production frontend. Exported review notes are separate
+from gold labels and do not permit benchmark freeze. The offline report currently lacks candidate
+Chunk text, so candidate IDs or fuzzy scores alone must not be used to confirm a label.
 
 After the six private papers are reindexed and the 52 answerable labels are resolved, run the
 fail-closed release evaluator against the live API. All input/output paths below are ignored by Git:

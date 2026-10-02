@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -68,3 +68,5 @@ class ChatResponse(CamelModel):
     sources: list[SourceOut]
     rewritten_query: str
     degraded_reasons: list[str]
+    retrieval_queries: list[str]
+    retrieval_workflow: Literal["single_pass", "bounded_refinement"]

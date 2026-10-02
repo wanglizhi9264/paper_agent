@@ -57,4 +57,11 @@ class SearchResponse(CamelModel):
     rewritten_query: str
     results: list[SearchResultOut]
     degraded_reasons: list[str] = Field(default_factory=list)
-    debug: dict[str, object] | None = None
+    retrieval_queries: list[str] = Field(default_factory=list)
+    retrieval_workflow: Literal["single_pass", "bounded_refinement"] = "single_pass"
+    debug: dict[str, object] | None = Field(
+        default=None,
+        description="Opt-in stage trace: snapshot_id, policy, dense/bm25/rrf/rerank, "
+        "candidate_chunk_ids, selected, selection_decisions, table_expansions, timings_ms. "
+        "Contains identifiers and scores, not paper text.",
+    )

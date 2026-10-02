@@ -67,6 +67,8 @@ export interface SearchResponse {
   rewritten_query: string;
   results: SearchResultItem[];
   degraded_reasons: string[];
+  retrieval_queries: string[];
+  retrieval_workflow: "single_pass" | "bounded_refinement";
 }
 
 export interface SearchResultItem {

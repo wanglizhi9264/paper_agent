@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -45,8 +45,19 @@ class Settings(BaseSettings):
     rerank_model: str = "BAAI/bge-reranker-base"
     rerank_revision: str = Field(default="")
     rerank_device: str = "cuda:0"
-    rerank_batch_size: int = 4
+    rerank_batch_size: int = Field(default=4, ge=1)
     rerank_dtype: str = "float16"
+    rerank_max_tokens: int = Field(default=512, ge=32, le=8192)
+
+    # Retrieval experiments: keep the validated legacy default until A/B gates pass.
+    retrieval_dense_top_k: int = Field(default=30, ge=20, le=200)
+    retrieval_bm25_top_k: int = Field(default=30, ge=20, le=200)
+    retrieval_rrf_top_k: int = Field(default=30, ge=20, le=200)
+    retrieval_selection: Literal["legacy", "cell_coverage"] = "legacy"
+    retrieval_document_balance: Literal["off", "explicit_scope"] = "explicit_scope"
+    chat_retrieval_workflow: Literal["single_pass", "bounded_refinement"] = "single_pass"
+    chat_refinement_max_tokens: int = Field(default=600, ge=128, le=1024)
+    chat_rewrite_language: Literal["preserve", "english_for_cjk"] = "preserve"
 
     # --- Generator (OpenAI-compatible) ---
     llm_base_url: str = "http://127.0.0.1:11434/v1"
@@ -97,6 +108,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _validate(self) -> Self:
+        if self.retrieval_rrf_top_k > self.retrieval_dense_top_k + self.retrieval_bm25_top_k:
+            raise ValueError("RRF pool must not exceed the sum of retrieval pools")
         if self.gpu_max_concurrency < 1:
             raise ValueError("PAPER_RAG_GPU_MAX_CONCURRENCY must be >= 1")
         if self.max_upload_bytes <= 0 or self.max_upload_bytes > 104_857_600:

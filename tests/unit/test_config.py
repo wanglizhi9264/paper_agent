@@ -14,6 +14,40 @@ def test_defaults_loaded_from_test_env() -> None:
     assert settings.max_upload_bytes == 104_857_600
     assert settings.gpu_max_concurrency == 1
     assert settings.host == "127.0.0.1"
+    assert settings.retrieval_selection == "legacy"
+    assert settings.retrieval_document_balance == "explicit_scope"
+    assert settings.chat_retrieval_workflow == "single_pass"
+    assert settings.chat_refinement_max_tokens == 600
+    assert settings.chat_rewrite_language == "preserve"
+    assert (
+        settings.retrieval_dense_top_k
+        == settings.retrieval_bm25_top_k
+        == settings.retrieval_rrf_top_k
+        == 30
+    )
+    assert settings.rerank_max_tokens == 512
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"retrieval_dense_top_k": 201},
+        {"retrieval_bm25_top_k": 0},
+        {"retrieval_rrf_top_k": 100},
+        {"retrieval_selection": "magic"},
+        {"retrieval_document_balance": "global"},
+        {"chat_retrieval_workflow": "unbounded"},
+        {"chat_refinement_max_tokens": 64},
+        {"chat_rewrite_language": "translate_everything"},
+        {"rerank_batch_size": 0},
+        {"rerank_max_tokens": 0},
+    ],
+)
+def test_invalid_retrieval_config(overrides) -> None:
+    from app.core.config import Settings, get_settings
+
+    with pytest.raises(ValidationError):
+        Settings.model_validate({**get_settings().model_dump(), **overrides})
 
 
 def test_invalid_env_rejected() -> None:

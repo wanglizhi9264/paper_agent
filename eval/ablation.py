@@ -78,8 +78,10 @@ def run_ablation(
     """Run ablation experiments.
 
     ``retrieve_fn`` is a callable (config, query) -> list[str] (chunk_ids).
-    If None, uses a mock that returns relevant_chunk_ids (oracle).
+    It is mandatory: using gold labels as predictions would fabricate a run.
     """
+    if retrieve_fn is None:
+        raise ValueError("retrieve_fn is required; oracle evaluation is forbidden")
     configs = configs or DEFAULT_CONFIGS
     dataset = load_dataset(dataset_path)
     results: list[AblationResult] = []
@@ -95,13 +97,9 @@ def run_ablation(
             relevant = item.get("relevant_chunk_ids", [])
             required_cites = item.get("required_citation_chunk_ids", [])
 
-            if retrieve_fn is not None:
-                start = time.perf_counter()
-                retrieved = retrieve_fn(cfg, query)
-                latencies.append((time.perf_counter() - start) * 1000)
-            else:
-                # Oracle: return relevant items in order.
-                retrieved = relevant[:]
+            start = time.perf_counter()
+            retrieved = retrieve_fn(cfg, query)
+            latencies.append((time.perf_counter() - start) * 1000)
 
             retrieval_results.append(
                 {

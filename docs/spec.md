@@ -1,8 +1,8 @@
 # Paper RAG Assistant 技术规格
 
 > 状态：Approved for implementation（实现重新验收中）
-> 版本：1.2.0
-> 最后更新：2026-08-25
+> 版本：1.3.0
+> 最后更新：2026-10-02
 > 目标环境：单机、单用户、NVIDIA RTX 2060（按 6 GB 显存预算）
 
 ## 1. 文档约定
@@ -44,7 +44,7 @@
 - 多用户、组织、权限、云同步和公网 SaaS；
 - OCR、手写识别、复杂数学公式语义还原；
 - 对跨页复杂表格做完美结构恢复；
-- Agent、自主联网搜索、知识图谱；
+- 开放式/多 Agent、自主联网搜索、知识图谱；§14.7 的有界本地 evidence workflow 除外；
 - CHM、HTML、JSON、XLSX Loader；
 - 分布式向量数据库和多节点高可用；
 - 自动生成 50 条高质量人工标注评测数据。
@@ -459,6 +459,75 @@ Content:
 <raw content>
 ```
 
+### 14.6 Evidence selection 实验切片（2026-09-04）
+
+研究依据与取舍见 `docs/retrieval-upgrade-research.md`。默认仍为 legacy 30/30/30，
+不得把候选池 oracle、合成测试或 dev 收益当作发布门通过。
+
+- `retrieval_dense_top_k`、`retrieval_bm25_top_k`、`retrieval_rrf_top_k` 可配置，
+  默认均 30，范围 20..200；RRF pool 不大于两路 pool 之和。API `top_k` 仍为 1..20。
+- `retrieval_selection=legacy|cell_coverage`，默认 legacy。两者先按 chunk ID，再按
+  content hash 去重；legacy 保留原行为。cell_coverage 将 hash 去重限制在同一
+  document/version/table identity，避免不同论文或不同表的相同文本被误删。
+- `retrieval_document_balance=off|explicit_scope` 独立于 cell coverage；默认
+  `explicit_scope`，其固定 benchmark A/B 结果必须随发布记录保存。该策略仅对含多篇
+  文档且文档数不超过
+  `top_k` 的显式 `documents` scope 生效：Dense/BM25 候选池先各补齐每篇 scope 文档
+  排名最高的候选，RRF/rerank 后再为每篇文档保留一个可选 Chunk，并按原排序和既有
+  去重规则回填。`all` 与 `collection` scope
+  不做隐式配额；结果仍不得越过原 scope。
+- cell_coverage 只抑制同一 document/version/table 内、全部 cell IDs 已由更高排名
+  的已选 row/group 覆盖的候选；不同列组、不同表/版本不合并。缺失或非法 cell IDs、
+  table_raw_text 不作 cell 等价推断。不得仅凭 row_indices/fingerprint 判定等价。
+- 不替换已选 child 为未评分 parent，不改 raw/retrieval 文本、Chunk IDs、索引或标签。
+  Neighbor/parent expansion 仍只在 rerank 和 selection 后执行。
+- reranker 输入保持原有 rewritten query + retrieval_content；现有表格文本已包含
+  文档/章节/caption/行名/列头，不重复拼接，也不未经验证改变 rewrite 语义。
+- `debug` 保留 dense/bm25/rrf/table_expansions，追加 snapshot_id、policy、rerank、
+  selected、selection_decisions、timings_ms；仅输出 ID/rank/score/原因，不复制论文正文。
+  `candidate_chunk_ids` 必须覆盖 dense、BM25、RRF、rerank 和 selected 全阶段出现的
+  FAISS ID，不能只覆盖 fused pool；任一无法映射的 ID 必须使评测 fail closed。
+- reranker 输入 max_tokens 默认 512、batch 必须为正；模型按 model/revision/device/
+  dtype/max_tokens/batch 缓存单个配置。只捕获明确依赖/推理错误，非法数量或非有限
+  scores 视为 RERANK_ERROR 并显式降级；程序逻辑错误不得伪装为模型不可用。
+- 评测保留 strict Chunk-ID Recall，不自动改写 frozen labels；cell coverage 只作为
+  同表证据覆盖诊断。使用固定 dev split 比较 legacy30、wide80、wide80+coverage，
+  test 不参与选参。未完成真实验收前不得更改 `.env` 或默认策略。
+
+### 14.7 有界证据补充工作流（2026-09-04）
+
+用户明确授权参考论文 Agent 改进项目后，聊天链路可以实验性启用
+`bounded_refinement`。它是 PaperQA 式“检索—检查—补充检索”的确定性工作流，
+不是自主联网或无界 Agent；搜索 API 继续保持单次检索。
+
+- `chat_retrieval_workflow=single_pass|bounded_refinement`，默认 `single_pass`。
+  未通过固定 dev split 的真实 A/B 前不得切换默认值。
+- 每次 chat 最多 3 次 LLM 调用（有历史时 1 次 rewrite、1 次 evidence plan、1 次
+  最终生成）和 2 次本地检索调用；检索串行执行。禁止递归、自主联网、下载文献、
+  改变 Session scope 或调用任意外部工具。
+- evidence planner 输出预算由 `chat_refinement_max_tokens` 控制，默认 600，范围
+  128..1024；该预算包含 reasoning model 的 reasoning tokens，禁止因空 content 无界重试。
+- 首轮 query 使用结构化 rewrite 的 `retrieval_query`。planner 只读取该 rewrite 和最多
+  6 条首轮候选的 title/section/page/每条最多 600 字符原文；它只能判断直接证据是否
+  充分，并在缺失时给出最多 1 条补充 query，不得回答问题或增加来源中不存在的事实。
+- 停止条件为：首轮充分、planner 失败、planner 返回无效/重复 query、补充检索失败，
+  或第 2 次检索完成。planner/补充检索失败分别追加稳定降级码
+  `EVIDENCE_PLAN_FAILED` / `REFINEMENT_SEARCH_FAILED`，并保留首轮结果。
+- 两轮候选只按各轮 1-based rank 做 RRF（`k=60`），禁止直接相加 BM25、cosine 或
+  reranker 原始分数；随后按 chunk ID、再按 `sha256(raw_content)` 去重并截取 chat
+  `top_k=8`。cell_coverage 模式的 hash key 额外包含 active document/table identity，
+  与 §14.6 保持一致。相同 RRF 分数以最佳单轮 rank、首次 query 顺序、chunk ID 稳定排序。
+- HTTP chat 与 SSE meta 必须返回实际执行的 `retrieval_queries` 和
+  `retrieval_workflow`。这些字段是可审计执行轨迹，不包含 planner rationale、prompt、
+  API key 或额外论文正文；citation 仍只绑定最终实际打包的唯一 Chunk ID。
+- `chat_rewrite_language=preserve|english_for_cjk` 控制 chat-only 检索查询语言，搜索 API
+  仍不调用 LLM。`english_for_cjk` 遇到含 CJK 字符的问题时，即使没有历史也执行一次
+  结构化 rewrite，要求 standalone query 使用英文并原样保留论文名、模型名、数据集、
+  数字与指标；生成阶段仍使用用户原问题。rewrite 失败必须回退原问题并记录
+  `REWRITE_FAILED`，不得扩大 session scope。非 CJK 单轮问题不得为此增加 LLM 调用。
+- 此工作流不新增持久化 checkpoint，不替代 PostgreSQL/ARQ，也不得被描述为 durable
+  Agent。后续若需要可恢复长任务，必须另行设计状态机、取消、重试和迁移。
+
 ## 15. Generation 与 Citation
 
 `LLMProvider` 必须提供异步 `generate()` 和 `stream()`，业务代码只依赖统一 message、timeout、usage 和 finish reason 模型。
@@ -468,6 +537,9 @@ Content:
 - 引用编号必须存在；
 - 每个编号映射至少一个唯一 `chunk_id`；
 - 无效 marker 从结构化 citations 中剔除并记录 `INVALID_CITATION_MARKER`，不得伪造映射；
+- 若生成文本去除前导空白后以完整固定拒答句开头，服务端必须将最终可见答案规范为该
+  固定句并清空全部引用。SSE 在尚未判定该前缀前只允许短暂缓冲；一旦确认拒答，只发送
+  固定句并抑制后续猜测与 citation marker，持久化内容必须与客户端可见内容一致；
 - HTTP/SSE 返回 answer text 与结构化 `citations[]`。
 
 Generation 失败不得保存成功 assistant message。超时返回稳定错误；客户端断开时取消上游请求并把 message 标记为 interrupted。
@@ -633,6 +705,27 @@ event: error      data: {error:{code,message,request_id}}
   "required_citation_chunk_ids": ["..."]
 }
 ```
+
+Private benchmark 的事实真值必须保存为 `document_key + 1-based page +
+section_path + evidence quote + quote hash`；snapshot-scoped Chunk UUID 只能是由当前
+active DocumentVersion 动态解析出的派生标签。resolver 必须复用 `unicode-v2`
+normalization，fuzzy/embedding 结果只能进入候选列表，不能自动成为 gold。
+
+每个 evidence anchor 独立保存 resolution：`resolved`、`multi_chunk`、
+`parser_issue`、`manual_review` 或 `unresolved`。`multi_chunk` 只允许唯一的相邻 chunk
+窗口，并保存窗口内全部 Chunk UUID；该 evidence unit 只有在 top-k 同时包含全部 UUID
+时才算命中。多个精确候选不得自动任选。任一 answerable 样本含 parser issue、人工复核
+或未解析 anchor 时，不得冻结为可评分数据集，也不得用旧 Chunk UUID 回退。
+
+人工复核界面只能经 loopback 开发服务读取本机私有异常题、报告、SHA-256 匹配的原始 PDF
+和 pinned snapshot 对应的 Document IR（或由用户显式导入）；
+界面不得直接写回 gold evidence 或 derived labels。审视决定必须另存为版本化的独立文件；
+离线 resolver 只有在决定同时绑定原 quote hash、原 PDF SHA-256、pinned snapshot、物理页和
+已核验 Chunk content hash 时才能消费该决定。重新解析后若 content hash 不再唯一匹配，必须
+回退 `manual_review`，不得沿用旧 locator。人工决定只能确认 PDF 原页可见的既有证据，不能依据
+Retriever 排名、embedding 相似度或答案内容扩大 gold 范围；满足上述约束后才可解除 evidence
+freeze gate，runtime Chunk UUID 仍须另行绑定后才能评分。
+界面缺少候选 Chunk 正文/IR 时必须明确提示信息不完整，不能把 fuzzy 候选伪装成已确认来源。
 
 实现 Recall@1/3/5/10、MRR、nDCG@K、Citation Precision/Recall、检索和端到端延迟。Answer Accuracy 可通过人工或可配置 judge 计算，默认报告必须标注 judge model，禁止把 LLM judge 当客观真值。
 
