@@ -175,6 +175,23 @@ six corpus documents and all runtime/recovery gates are green. A complete run al
 exit code 1 and a FAILED report. Invalid or incomplete prerequisites produce exit code 2 before any
 predictions are generated.
 
+Before treating a split as an unseen holdout, audit the resolved labels for structural errors and
+cross-split source leakage:
+
+```bash
+uv run python -m eval.gold_benchmark_audit \
+  eval/private_benchmark/standard_v2/benchmark_resolved.json \
+  --expected-total 60 --expected-dev 42 --expected-test 18 \
+  --require-leakage-free \
+  --output-json eval/private_benchmark/standard_v2/standard_audit_report.json \
+  --output-markdown eval/private_benchmark/standard_v2/standard_audit_report.md \
+  --output-review-markdown eval/private_benchmark/standard_v2/benchmark_all_questions.md
+```
+
+The audit fails if dev/test share an evidence anchor, physical source page, or resolved Chunk, or if
+answerability, quote hashes, resolution states, and citation labels are inconsistent. Private PDFs,
+questions, evidence text, and generated reports remain ignored and must not be committed.
+
 `corpus-evidence.json` is an operator-produced acceptance record, not an application artifact. It
 must contain six document records (`sha256_match`, `status`, positive page/chunk counts), the active
 snapshot ID and reload/stability checks, six 64-character parser signatures, pinned embedding/

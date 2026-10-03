@@ -381,3 +381,18 @@ scope 不变，Gold 不变，Chunk/parser 清理和全量 reindex 另起切片�
 Precision/Recall 略降且平均延迟增加 4.75 秒，因此默认仍保持 preserve。公开聚合结果见
 `docs/gold-benchmark-rerun-2026-10-02.md`。任何 Recall 改善与后续 qrel 审计分开报告，
 禁止用 Retriever 结果反向修改 evidence。
+
+## 21. 2026-10-04 Leakage-controlled benchmark v2
+
+对既有 60 题做 split 审计后发现，dev/test 之间共享 9 组稳定 evidence anchor、13 个来源页和
+14 个当前 Chunk；同时旧 test 已被多轮真实评测使用。因此 v1 保留为 legacy regression set，
+不再声称是 unseen holdout。标准 v2 保留原 42 道 dev，并从六篇原 PDF 中旧 gold 未使用的页
+重新编写 18 道 test，保持原有题型分布和 52/8 answerable 配比。新题逐页视觉核验；抽取断词、
+表格错序或公式空格只能通过绑定 quote/PDF/snapshot/page/content hash 的 review decision 解除，
+禁止由 fuzzy 或 Retriever 候选自动升级。
+
+新增公开、无私有内容的 `eval.gold_benchmark_audit`，对任意 resolved benchmark 检查数据契约、
+quote hash、最终 resolution 以及跨 split 的 anchor/page/Chunk 重叠，并可输出机器 JSON、摘要
+Markdown 和全题人工审阅 Markdown。私有 v2 数据、原论文和具体 evidence 继续仅保存在本机；
+Git 只提交审计工具、测试和方法文档。v2 test 在冻结前不运行 retrieval，冻结后的首次正式
+evaluation 才作为新 baseline，v1 历史指标不得直接与 v2 混称为检索提升。

@@ -727,6 +727,13 @@ Retriever 排名、embedding 相似度或答案内容扩大 gold 范围；满足
 freeze gate，runtime Chunk UUID 仍须另行绑定后才能评分。
 界面缺少候选 Chunk 正文/IR 时必须明确提示信息不完整，不能把 fuzzy 候选伪装成已确认来源。
 
+Benchmark split 还必须通过独立的泄漏审计。开发集与冻结测试集不得共享稳定 evidence
+anchor、`document_key + physical page` 或解析后的 Chunk；审计必须同时检查问题 ID 唯一性、
+answerable/unanswerable 契约、quote hash、最终 resolution 状态和派生 citation labels。一旦测试题
+参与检索调参或被反复用于方案选择，该版本只能作为 legacy regression set，不能继续宣称为
+unseen holdout。替代测试题必须从未被开发集 gold 使用的原 PDF 页面重新编写、逐页核验并经
+resolver 冻结；旧题保留，不得删除困难题或依据 Retriever 返回改写 gold。
+
 实现 Recall@1/3/5/10、MRR、nDCG@K、Citation Precision/Recall、检索和端到端延迟。Answer Accuracy 可通过人工或可配置 judge 计算，默认报告必须标注 judge model，禁止把 LLM judge 当客观真值。
 
 至少运行：Dense；BM25；Dense+BM25+RRF；加 Rerank；Full pipeline。另比较 rewrite on/off 与 expansion on/off。输出原始 JSON 和 Markdown 汇总，固定 seed。

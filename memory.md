@@ -4,12 +4,13 @@
 
 ## 1. 当前状态
 
-更新时间：2026-10-02
+更新时间：2026-10-04
 
 > 2026-08-25 生产审计纠正：下列历史 Phase 3–12 条目仅表示独立模块或 fake-driven 测试曾存在，不代表生产端到端已接通。当前权威状态以本节顶部“恢复实施状态”和 `docs/spec.md` §22.1–22.2 为准。
 
 ### 恢复实施状态
 
+- 2026-10-04 完成 Private benchmark split 质量复核与标准 v2 冻结：旧 60 题虽已 52/52 evidence resolved，但 dev/test 共享 9 组稳定 evidence anchor、13 个原 PDF 页和 14 个当前 Chunk，且旧 test 已被多轮调参/评测使用，因此降级为 legacy regression set。标准 v2 保留原 42 道 dev，从旧 gold 未使用的 PDF 页重新编写并逐页核验 18 道 test，保持总计 60、52 answerable/8 unanswerable及原题型分布；当前 snapshot 上 52/52 resolved，18 个 anchor 使用绑定 quote/PDF/snapshot/page/content hash 的人工 source verification，parser_issue/manual_review/unresolved 均为 0，dev/test anchor/page/Chunk 重叠均为 0，QA digest 为 `36869c9c...219218228`。新增通用 `eval.gold_benchmark_audit` 和 4 个单元测试；新 test 尚未运行 retrieval，避免在冻结前污染首次 baseline。私有 v2、论文与报告仍 ignored，不上传 GitHub。
 - 2026-10-02 完成不修改 Gold 的后续工程修复：debug trace 现在覆盖 Dense/BM25/RRF/Rerank/Selected 全阶段 ID 映射；显式多文档 scope 在候选池与最终选择两处保证每篇至少一个候选；HTTP/SSE 对固定拒答前缀统一截断为标准句并清空引用；CJK→英文结构化 retrieval rewrite 已实现但默认保持 `preserve`。冻结 snapshot A/B 中 8 道跨论文题由 7/8 单文档垄断变为 8/8 两篇均覆盖，selected Recall@10 保持 0.3830；未改 question/answer/evidence/snapshot。实际英文 rewrite A/B 因当前 provider 为外部 DeepSeek 且没有 Private benchmark 外发授权而未运行。
 - 2026-10-01 完成 private 60 题 gold-evidence 全量离线审计、PDF 原页核验和当前 snapshot 重绑定：60 题含 52 answerable/8 unanswerable；自动 resolver 先得到 42 resolved、4 parser_issue、6 manual_review，随后对 10 个异常 anchor 逐页核对原 PDF、pinned IR 和当前 chunk，并以原 quote hash + PDF SHA-256 + snapshot + page + chunk content hash 保存独立 review decisions。运行时 repair 在 snapshot `2d0e23b3-da8c-4631-aceb-85cf0c656167` 上得到 52/52 resolved（23 direct、23 normalization、10 manual-verified anchors），multi_chunk/parser_issue/manual_review/unresolved/stale Chunk ID 均为 0；question/answer digest 保持 `d5f1fd8...0ac38`。五组正式 live evaluation 已运行：Dense/BM25/RRF/Rerank Recall@10 分别为 0.2628/0.3526/0.3654/0.3782；Full Pipeline Recall@10 0.3830、MRR 0.3642、nDCG@10 0.3360、Citation Precision 0.1940、Citation Recall 0.2952、Unanswerable rejection 0.625，60/60 无预测错误但发布质量门未通过。旧 0.3665/0.2016/0.2427 继续仅标记为 pre-benchmark-repair baseline，不把差异全部归因于检索改进。
 - 2026-09-17 新增本地 Gold Evidence 审视页 `/gold-review`：loopback Vite 开发服务自动读取 ignored 异常题 JSON/修复报告，按 dataset SHA-256 配对原始 PDF，并核对报告 snapshot/旧 runtime scope/manifest 后读取对应 active IR 页；按题查看 evidence、原因、候选及对应页。人工判断仅导出独立 JSON 笔记，不触碰 gold label 或 freeze gate。离线报告不含候选 Chunk 正文，界面明确提示该限制；未新增生产 API 或运行评测。
@@ -306,6 +307,7 @@ max_upload_bytes: 104857600
 | 2026-10-02 | 后续工程修复与 A/B | changed-file Ruff/format；`mypy app`；`pytest -q`；PostgreSQL integration；前端 lint/typecheck/test/build；两次 60 题 live retrieval；API/Worker/frontend health | changed scope Ruff/format 与 mypy 102 files 通过；pytest **699 通过、7 skipped**；migration **4 通过**；前端 **10 测试通过**并 build；off/balanced selected Recall@10 均 0.3830，跨论文两文档覆盖由 1/8 提升为 8/8；API live/ready ok、Worker 运行、frontend 200。仓库级 Ruff 仍仅被用户未跟踪 `tmp/` 和既有 private helper 两处 lint 阻塞，未改无关文件。 |
 | 2026-10-02 | Private 60 题全量重跑 | `eval.gold_live_ablation`；两次 `eval.pdf_v2_release --allow-live-api`（默认 preserve / `PAPER_RAG_CHAT_REWRITE_LANGUAGE=english_for_cjk`）；API live/ready 与 frontend HTTP 检查 | 检索 R@10 Dense/BM25/RRF/Rerank/Selected 为 **0.2628/0.3526/0.3654/0.3782/0.3830**。默认 Full Pipeline R@10/Citation P/Citation R/拒答为 **0.3830/0.2000/0.3143/0.875**；英文 A/B 为 **0.4087/0.1944/0.3048/1.0**；两轮 prediction errors=0，release gate 均失败。首次全零输出是 API 网络沙箱导致的 provider 失败，已排除。默认配置服务已恢复，live/ready/frontend 均正常。 |
 | 2026-10-02 | GitHub 上传前质量门 | staged Python Ruff/format；`mypy app`；`pytest -q`；前端 lint/typecheck/test/build；secret pattern scan；`git diff --cached --check` | Ruff/format 35 个 Python 文件通过；mypy 102 files 通过；pytest **699 通过、7 skipped**；前端 **10 测试通过**并完成 build；未发现实际 API/GitHub key；私有 benchmark、PDF、raw predictions、index 和用户 `tmp/` 均未暂存。 |
+| 2026-10-04 | Standard benchmark v2 split 审计与冻结 | 原 PDF 11 个异常 evidence 页视觉核验；resolver；`eval.gold_benchmark_audit`；Ruff/format；`mypy app`；`pytest -q`；前端 lint/typecheck/test/build | v1 发现 dev/test 共享 9 anchors、13 pages、14 chunks，降级 legacy regression；v2 为 60 题（42/18、52/8），52/52 resolved、18 manual-verified anchors、0 unresolved，跨 split anchor/page/chunk 均为 0；Ruff/format、mypy 102 files 通过，pytest **703 通过、7 skipped**，前端 **10 测试通过**并 build；新 test 未运行 retrieval。 |
 
 ## 9. 未决事项
 
@@ -318,7 +320,7 @@ max_upload_bytes: 104857600
 - 50+ eval 问题所用论文集合和人工标注来源。
 - V2-3 目标机器验收：Docling 模型下载体积、固定 layout/table revision SHA、public fixture real smoke、CPU/GPU 峰值、六论文/11 hard cases A/B 报告。
 - 2026-08-27 的 release 质量失败不是环境造成：当时 DeepSeek、CUDA、数据库、索引均可运行，真实质量剩余项为提高跨论文/多轮检索并重新审计 frozen chunk labels（现有 label chunk 对 evidence 原文的直接覆盖并非 100%）。2026-09-04 新一轮 A/B 仅受当前 Docker/PostgreSQL 不可连接阻塞；DeepSeek、CUDA、本地 E5/BGE 已重新实测可用。这不改变此前低 Recall 的质量结论。MinerU pipeline 剩余 6 组件和 CodeFormulaV2 完整权重仍未具备，但 Docling 主链路以 `formula_enrichment=false` 可运行。
-- Gold evidence 已离线冻结、重绑定当前 snapshot 并完成五组 live evaluation；当前剩余的是低检索召回、低引用精确/召回和 5/8 不可回答正确拒答的质量问题，不再是 benchmark label 或运行环境阻塞。后续优化必须继续使用同一冻结 benchmark 做 before/after，禁止按 Retriever 返回反改 gold。
+- 旧 60 题已完成 evidence freeze 和五组 live evaluation，但因 split 泄漏与 test 反复使用只保留为 legacy regression；新的 leakage-controlled v2 已冻结，首次正式 evaluation 尚未运行。后续调参只可使用 v2 dev；v2 test 仅用于锁定方案的最终报告，禁止按 Retriever 返回反改 gold。
 - 实际 `english_for_cjk` provider A/B 已在用户授权下完成：Recall@10 提升到 0.4087、不可回答拒答 8/8，但 Citation P/R 略降、平均延迟升至 14.13 秒，因此默认仍保持 `preserve`。下一工程批次仍是 parser/chunk 噪声清理、影子 reindex 与同 snapshot 派生标签重绑定，不能原地覆盖 active index。
 
 这些是 Phase 内可验证配置，不改变已批准系统结构。若实测迫使改变架构或 MVP 范围，先与用户确认并更新 spec/proposal。
