@@ -5,6 +5,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
+from eval.ablation import run_ablation
 from eval.retrieval_eval import (
     compute_citation_metrics,
     compute_mrr,
@@ -114,3 +117,10 @@ def test_load_dataset(tmp_path: Path) -> None:
     loaded = load_dataset(p)
     assert len(loaded) == 1
     assert loaded[0]["question"] == "test"
+
+
+def test_ablation_forbids_oracle_predictions(tmp_path: Path) -> None:
+    path = tmp_path / "dataset.json"
+    path.write_text(json.dumps({"dataset": []}), encoding="utf-8")
+    with pytest.raises(ValueError, match="oracle evaluation is forbidden"):
+        run_ablation(path)

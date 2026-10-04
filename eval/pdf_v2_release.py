@@ -19,6 +19,11 @@ from pathlib import Path
 from typing import Any
 
 from app.cli.pdf_v2_gate import evaluate_gate as evaluate_hard_case_gate
+from eval.gold_evidence_metrics import (
+    evaluate_gold_predictions,
+    group_recall_at_k,
+    resolved_groups,
+)
 
 THRESHOLDS = {
     "recall@10": 0.85,
@@ -88,6 +93,22 @@ def validate_resolved_dataset(payload: object) -> DatasetSummary:
     unresolved = [str(item["id"]) for item in answerable if not _relevant_ids(item)]
     if unresolved:
         raise ReleaseGateError("LABEL_UNRESOLVED", ",".join(unresolved))
+    unsafe_resolution = [
+        str(item["id"])
+        for item in answerable
+        if item.get("evidence_resolution_status") not in {None, "resolved", "multi_chunk"}
+        or any(
+            group.get("status") not in {"resolved", "multi_chunk"}
+            for group in (
+                item.get("snapshot_labels", {}).get("evidence_groups", [])
+                if isinstance(item.get("snapshot_labels"), dict)
+                else []
+            )
+            if isinstance(group, dict)
+        )
+    ]
+    if unsafe_resolution:
+        raise ReleaseGateError("LABEL_REVIEW_REQUIRED", ",".join(unsafe_resolution))
     invalid_unanswerable = [
         str(item["id"]) for item in items if not item["answerable"] and _relevant_ids(item)
     ]
@@ -114,6 +135,7 @@ def validate_resolved_dataset(payload: object) -> DatasetSummary:
             "split": item["split"],
             "relevant_chunk_ids": _relevant_ids(item),
             "required_citation_chunk_ids": _required_citations(item),
+            "evidence_groups": resolved_groups(item),
         }
         for item in items
     ]
@@ -177,10 +199,7 @@ def evaluate_predictions(dataset: object, predictions: object) -> dict[str, obje
     if len(prediction_ids) != len(set(prediction_ids)):
         raise ReleaseGateError("PREDICTION_IDS", "prediction IDs must be unique")
     by_id = {value["id"]: value for value in predictions}
-    recall_values: list[float] = []
-    citation_hits = 0
-    citation_predicted = 0
-    citation_required = 0
+    gold_metrics = evaluate_gold_predictions(items, predictions)
     unanswerable_total = 0
     unanswerable_rejected = 0
     errors = 0
@@ -192,23 +211,14 @@ def evaluate_predictions(dataset: object, predictions: object) -> dict[str, obje
             errors += 1
         latencies.append(float(prediction.get("latency_ms") or 0.0))
         if item["answerable"]:
-            relevant = set(_relevant_ids(item))
-            retrieved = {str(value) for value in (prediction.get("retrieved_chunk_ids") or [])[:10]}
-            recall = _ratio(len(relevant & retrieved), len(relevant))
-            recall_values.append(recall)
+            retrieved = [str(value) for value in prediction.get("retrieved_chunk_ids") or []]
+            recall = group_recall_at_k(resolved_groups(item), retrieved, 10)
             split_hits[str(item["split"])].append(recall)
-            required = set(_required_citations(item))
-            cited = {str(value) for value in prediction.get("predicted_citation_chunk_ids") or []}
-            citation_hits += len(required & cited)
-            citation_predicted += len(cited)
-            citation_required += len(required)
         else:
             unanswerable_total += 1
             unanswerable_rejected += prediction.get("rejected_unanswerable") is True
     metrics = {
-        "recall@10": sum(recall_values) / len(recall_values),
-        "citation_precision": _ratio(citation_hits, citation_predicted),
-        "citation_recall": _ratio(citation_hits, citation_required),
+        **gold_metrics.to_dict(),
         "unanswerable_rejection": _ratio(unanswerable_rejected, unanswerable_total),
         "dev_recall@10": sum(split_hits["dev"]) / len(split_hits["dev"]),
         "test_recall@10": sum(split_hits["test"]) / len(split_hits["test"]),

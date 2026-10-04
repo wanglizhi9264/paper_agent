@@ -285,7 +285,7 @@ MVP 最终仓库至少包含：
 ## 13. 推迟到 P1/P2 的能力
 
 P1：OCR、复杂 PDF parser 实验、JSON/HTML/CHM/XLSX Loader、可配置同义词/术语词典、响应缓存、答案质量 judge、Collection 批量操作，以及论文摘要/方法/实验/贡献/局限五类结构化阅读预设。  
-P2：多用户权限、向量数据库、agent、知识图谱、联网文献搜索、论文对比工作流、云部署。
+P2：多用户权限、向量数据库、开放式/多 agent、知识图谱、联网文献搜索、完整论文对比工作流、云部署；§18 已批准的有界本地 evidence workflow 除外。
 
 结构化阅读预设只能复用主 Retrieval Engine 并改变 query/prompt template，不得复制 ingestion、index 或 citation 实现。
 
@@ -333,3 +333,84 @@ P2：多用户权限、向量数据库、agent、知识图谱、联网文献搜�
 批准按 [`docs/pdf-ingestion-v2-spec.md`](./pdf-ingestion-v2-spec.md) 实施：项目自有 Canonical Document IR；PyMuPDF fast path；Docling layout parser；MinerU 隔离 challenger；table parent/row/group chunk；row-first retrieval + parent expansion；page/bbox/cell citation；结构化多轮 rewrite。
 
 实施顺序固定为 V2-0 至 V2-8。完成门为 11/11 hard cases、52/52 answerable labels 和完整 60 题 baseline；任一门未通过不得声明 PDF Ingestion V2 完成。
+
+## 18. 2026-09-04 论文 Agent 技术借鉴与检索质量切片
+
+用户要求参考 GitHub 成熟论文 Agent 改进项目。先补强 Phase 7/11 的证据选择与
+可复现实验，再考虑 P2 的有界检索工作流；不将此次研究直接解释为开放联网、
+自动下载文献、图谱建库或多 Agent 全面迁移。研究记录见
+[`retrieval-upgrade-research.md`](./retrieval-upgrade-research.md)。
+
+本轮实现可配置候选池、同表 cell coverage 选择、完整候选/选择诊断、reranker
+生命周期修复和只读 dev A/B CLI。不新增依赖、不迁移数据库、不重建 active index、
+不修改 private labels。保留 legacy 默认以便回滚。后续若引入 planner/refinement，
+先约束 scope、调用上限、停止条件、引用验证和持久化语义，再更新 spec；本轮不创建空 Agent 模块。
+
+用户随后明确要求继续实现。下一纵向切片采用 `spec.md` §14.7 的有界证据补充工作流：
+仅聊天链路可 opt-in，首轮检索后由结构化 planner 决定是否执行唯一一次补充检索，
+两轮通过 rank-only RRF 合并。默认和搜索 API 均不变；以单元/契约测试先验证预算、
+scope、停止、降级、去重和引用边界，再等待真实 dev A/B 决定是否启用。
+
+## 19. 2026-09-08 Private benchmark evidence repair
+
+在继续检索调参或发布评测前，插入一个 fail-closed benchmark repair 门：复用现有
+document/page/section/quote 稳定标注，以 `unicode-v2` 对 active parser/chunker 输出重新
+解析 snapshot labels。Fuzzy/embedding 仅生成候选；多候选、parser 缺失与未解析项分别
+进入人工复核报告，不允许回退旧 UUID 或用当前 Retriever 结果反向改 gold。只有 52 个
+answerable 样本的每个 evidence unit 均为 `resolved|multi_chunk` 后，才冻结数据并运行五组
+规定 evaluation。该切片不修改 ingestion、retrieval 默认值或答案真值。
+
+人工审视用本地浏览器页面读取 ignored private JSON/PDF/active IR，逐条记录判定并导出独立笔记；
+不把论文内容打包进前端，不提供一键确认 gold。批量审计允许消费经 PDF 原页视觉确认的独立
+review decision，但每条决定必须钉住原 quote hash、PDF SHA-256、snapshot、page 与 Chunk
+content hash；任一 pin 漂移即 fail closed 回到人工复核。审视完成后由离线 resolver 生成全量
+Markdown、resolved/unresolved JSON 和修复报告；runtime UUID label 绑定完成后才运行正式评测。
+
+## 20. 2026-10-02 检索质量后续修复切片
+
+用户选择暂缓工作量较大的 qrel completeness 人工审计，先处理不修改 Gold 的工程问题。
+本切片按最小可回滚顺序实施：修复全阶段 debug FAISS-ID 映射；为显式多文档 scope 增加
+可配置的一文档一候选保底；为含 CJK 的 chat query 增加英文结构化 retrieval rewrite；
+在 HTTP/SSE 两条生成链路确定性执行固定拒答句、无引用契约。搜索 API 不调用 LLM，
+scope 不变，Gold 不变，Chunk/parser 清理和全量 reindex 另起切片。
+
+跨文档平衡已在冻结 60 题 snapshot 做 before/after：8 道跨论文题从 7 道 Top-10 单文档
+垄断变为 8/8 同时覆盖两篇，最终 selected Recall@10 未下降，因此默认启用且仍可配置回滚。
+双语 rewrite 以同 scope/evidence/snapshot 的等义英文 query A/B 为前置证据。取得用户明确
+授权后完成实际 provider 60 题 A/B：Recall@10 从 0.3830 提升到 0.4087，但 Citation
+Precision/Recall 略降且平均延迟增加 4.75 秒，因此默认仍保持 preserve。公开聚合结果见
+`docs/gold-benchmark-rerun-2026-10-02.md`。任何 Recall 改善与后续 qrel 审计分开报告，
+禁止用 Retriever 结果反向修改 evidence。
+
+## 21. 2026-10-04 Leakage-controlled benchmark v2
+
+对既有 60 题做 split 审计后发现，dev/test 之间共享 9 组稳定 evidence anchor、13 个来源页和
+14 个当前 Chunk；同时旧 test 已被多轮真实评测使用。因此 v1 保留为 legacy regression set，
+不再声称是 unseen holdout。标准 v2 保留原 42 道 dev，并从六篇原 PDF 中旧 gold 未使用的页
+重新编写 18 道 test，保持原有题型分布和 52/8 answerable 配比。新题逐页视觉核验；抽取断词、
+表格错序或公式空格只能通过绑定 quote/PDF/snapshot/page/content hash 的 review decision 解除，
+禁止由 fuzzy 或 Retriever 候选自动升级。
+
+新增公开、无私有内容的 `eval.gold_benchmark_audit`，对任意 resolved benchmark 检查数据契约、
+quote hash、最终 resolution 以及跨 split 的 anchor/page/Chunk 重叠，并可输出机器 JSON、摘要
+Markdown 和全题人工审阅 Markdown。私有 v2 数据、原论文和具体 evidence 继续仅保存在本机；
+Git 只提交审计工具、测试和方法文档。v2 test 在冻结前不运行 retrieval，冻结后的首次正式
+evaluation 才作为新 baseline，v1 历史指标不得直接与 v2 混称为检索提升。
+
+## 22. 2026-10-04 文档证据路由实验
+
+在 standard v2 首次 baseline 已冻结后，新增一个 chat-only、默认关闭的
+`routed_multi_search` 纵向切片，优先针对跨论文和多轮问题。先执行原 scope primary search，
+再由结构化 LLM planner 仅根据当前 scope 的文档 ID/标题生成至多 3 条 paper-specific
+子查询；每条子查询在单文档子 scope 内独立走现有检索链路，最终用 rank-only RRF 合并。
+
+实施顺序为：先增加 route schema/config/OpenAPI 契约和 fail-closed 单测；再接入 chat/SSE
+审计轨迹与前端状态；最后只在 frozen answerable dev 比较 single/refinement/routed。路由器不读取
+Gold、答案或 Retriever 结果，不改变 ingestion/index/benchmark，也不扩大 Session scope。
+真实 A/B 未证明净收益前，`.env` 和代码默认值保持 `single_pass`。
+
+真实 DeepSeek dev A/B 发现默认 thinking 会耗尽 600–4096 输出 token 而不产生 content；按
+官方 Chat Completions 契约仅对 planner 发送 `reasoning_effort=none` 后，600-token JSON 输出稳定。
+最终 workflow 采用自适应组合：单文档直接 bounded refinement；多文档先 route；route 低置信度
+回退 bounded refinement。置信度 0.30 相比 0.65 没有增加 Recall 且成本更高，因此保留 0.65。
+两次相同配置 dev 重复表明 routed Recall 有方差，默认仍不切换，test 继续保持未触碰。

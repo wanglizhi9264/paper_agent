@@ -2,9 +2,16 @@ from __future__ import annotations
 
 import pytest
 
-from app.llm.base import LLMMessage
-from app.llm.citations import parse_citations, strip_invalid_markers, validate_citations
-from app.llm.openai_compatible import FakeLLMProvider
+from app.llm.base import LLMError, LLMMessage
+from app.llm.citations import (
+    REFUSAL_PREFIX,
+    RefusalStreamGate,
+    finalize_answer,
+    parse_citations,
+    strip_invalid_markers,
+    validate_citations,
+)
+from app.llm.openai_compatible import FakeLLMProvider, OpenAICompatibleProvider
 from app.llm.prompts import build_messages, build_rewrite_prompt, build_system_prompt
 
 
@@ -38,6 +45,34 @@ async def test_fake_llm_custom_template() -> None:
     assert "Custom answer" in resp.text
 
 
+@pytest.mark.asyncio
+async def test_openai_adapter_normalizes_malformed_response(monkeypatch) -> None:
+    import httpx
+
+    class MalformedResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {}
+
+    class Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+        async def post(self, *_args: object, **_kwargs: object) -> MalformedResponse:
+            return MalformedResponse()
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **_kwargs: Client())
+    provider = OpenAICompatibleProvider("http://127.0.0.1:1/v1", "secret", "model")
+
+    with pytest.raises(LLMError, match="request or response failed"):
+        await provider.generate([LLMMessage(role="user", content="question")])
+
+
 def test_build_system_prompt() -> None:
     sources = "[Source 1]\nDocument: Test\nContent: hello"
     prompt = build_system_prompt(sources)
@@ -60,6 +95,20 @@ def test_build_messages() -> None:
     assert messages[2].role == "assistant"
     assert messages[3].role == "user"
     assert messages[3].content == "q2"
+
+
+def test_openai_payload_can_disable_reasoning_for_structured_planners() -> None:
+    provider = OpenAICompatibleProvider("http://127.0.0.1:1/v1", "secret", "model")
+
+    payload = provider._build_payload(
+        [LLMMessage(role="user", content="route")],
+        temperature=0.0,
+        max_tokens=600,
+        stream=False,
+        reasoning_effort="none",
+    )
+
+    assert payload["reasoning_effort"] == "none"
 
 
 def test_parse_citations_valid() -> None:
@@ -110,3 +159,31 @@ def test_parse_citations_no_markers() -> None:
     valid, invalid = parse_citations("no citations here", {1: "a"})
     assert valid == []
     assert invalid == []
+
+
+def test_refusal_is_normalized_and_citations_are_cleared() -> None:
+    answer, citations, invalid = finalize_answer(
+        f"  {REFUSAL_PREFIX} A speculative explanation [1].", {1: "chunk-a"}
+    )
+
+    assert answer == REFUSAL_PREFIX
+    assert citations == []
+    assert invalid == []
+
+
+def test_refusal_stream_gate_handles_split_prefix_and_discards_suffix() -> None:
+    gate = RefusalStreamGate()
+
+    assert gate.feed("Insufficient evidence in ") == ""
+    assert gate.feed("the provided sources. Unsupported [1].") == REFUSAL_PREFIX
+    assert gate.feed(" more") == ""
+    assert gate.finish() == ""
+
+
+def test_refusal_stream_gate_releases_non_refusal_text_losslessly() -> None:
+    gate = RefusalStreamGate()
+
+    first = gate.feed("Evidence [1]")
+    second = gate.feed(" continues.")
+
+    assert first + second + gate.finish() == "Evidence [1] continues."

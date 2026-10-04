@@ -114,7 +114,15 @@ export function ChatPage() {
 
             {sseState.sources.length > 0 && (
               <div className="source-drawer">
-                <h3>Sources</h3>
+                <h3>
+                  Sources
+                  {sseState.retrievalQueries.length > 1 && (
+                    <span className="muted">
+                      {" "}· {sseState.retrievalQueries.length} bounded searches
+                      {sseState.retrievalWorkflow === "routed_multi_search" ? " · paper-routed" : ""}
+                    </span>
+                  )}
+                </h3>
                 {sseState.sources.map((src) => (
                   <div key={src.index} className="source-item">
                     <div className="source-header">

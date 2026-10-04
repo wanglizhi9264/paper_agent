@@ -11,18 +11,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import StreamingResponse
 
 from app.api.errors import DependencyUnavailableError, NotFoundError
+from app.core.config import get_settings
 from app.db.session import get_session
 from app.embedding.registry import get_embedding_provider
-from app.llm.base import LLMMessage
-from app.llm.citations import validate_citations
+from app.llm.base import LLMError, LLMMessage
+from app.llm.citations import RefusalStreamGate, finalize_answer
 from app.llm.openai_compatible import get_llm_provider
 from app.llm.prompts import build_messages, build_system_prompt
 from app.models.enums import MessageRole, MessageStatus
 from app.models.session import Message, Session
 from app.schemas.chat import BBoxOut, ChatRequest, ChatResponse, CitationOut, SourceOut
-from app.schemas.search import SearchRequest, SearchResponse, SearchScope
+from app.schemas.search import SearchResponse, SearchScope
+from app.services.evidence_workflow import gather_chat_evidence
 from app.services.query_rewrite import rewrite_query
-from app.services.retrieval import search_corpus
 
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
 
@@ -65,13 +66,30 @@ async def _prepare(
         )
         for message in recent
     ]
-    rewrite = await rewrite_query(get_llm_provider(), history, body.query, _scope(item))
+    settings = get_settings()
+    llm_provider = get_llm_provider(settings)
+    scope = _scope(item)
+    rewrite = await rewrite_query(
+        llm_provider,
+        history,
+        body.query,
+        scope,
+        language_strategy=settings.chat_rewrite_language,
+        reasoning_effort=(
+            None
+            if settings.chat_planner_reasoning_effort == "provider_default"
+            else settings.chat_planner_reasoning_effort
+        ),
+    )
     user = Message(session_id=item.id, role=MessageRole.USER, content=body.query)
     db.add(user)
-    search = await search_corpus(
+    search = await gather_chat_evidence(
         db,
-        SearchRequest(query=rewrite.rewrite.retrieval_query(), scope=_scope(item), top_k=8),
+        rewrite.rewrite,
+        scope,
         get_embedding_provider(),
+        llm_provider,
+        settings,
         original_query=body.query,
     )
     search.degraded_reasons.extend(
@@ -115,11 +133,11 @@ async def chat(
     _item, _user, search, messages, citation_map, sources = await _prepare(db, body)
     try:
         response = await get_llm_provider().generate(messages)
-    except Exception as exc:
+    except LLMError as exc:
         raise DependencyUnavailableError(
             code="LLM_UNAVAILABLE", message="LLM is unavailable."
         ) from exc
-    answer, citations, _invalid = validate_citations(response.text, citation_map)
+    answer, citations, _invalid = finalize_answer(response.text, citation_map)
     citation_models = [
         CitationOut(index=c.index, chunk_id=uuid.UUID(c.chunk_id)) for c in citations
     ]
@@ -140,6 +158,9 @@ async def chat(
         sources=sources,
         rewritten_query=search.rewritten_query,
         degraded_reasons=search.degraded_reasons,
+        retrieval_queries=search.retrieval_queries,
+        retrieval_routes=search.retrieval_routes,
+        retrieval_workflow=search.retrieval_workflow,
     )
 
 
@@ -159,16 +180,28 @@ async def chat_stream(
                 "request_id": getattr(request.state, "request_id", ""),
                 "message_id": str(message_id),
                 "rewritten_query": search.rewritten_query,
+                "retrieval_queries": search.retrieval_queries,
+                "retrieval_routes": [
+                    route.model_dump(mode="json") for route in search.retrieval_routes
+                ],
+                "retrieval_workflow": search.retrieval_workflow,
             },
         )
         yield _event("sources", {"sources": [source.model_dump(mode="json") for source in sources]})
         parts: list[str] = []
+        refusal_gate = RefusalStreamGate()
         try:
             async for chunk in get_llm_provider().stream(messages):
                 if chunk.text:
-                    parts.append(chunk.text)
-                    yield _event("delta", {"text": chunk.text})
-            answer, citations, _invalid = validate_citations("".join(parts), citation_map)
+                    visible = refusal_gate.feed(chunk.text)
+                    if visible:
+                        parts.append(visible)
+                        yield _event("delta", {"text": visible})
+            tail = refusal_gate.finish()
+            if tail:
+                parts.append(tail)
+                yield _event("delta", {"text": tail})
+            answer, citations, _invalid = finalize_answer("".join(parts), citation_map)
             citation_data = [{"index": c.index, "chunk_id": c.chunk_id} for c in citations]
             db.add(
                 Message(
@@ -190,7 +223,7 @@ async def chat_stream(
                     "degraded_reasons": search.degraded_reasons,
                 },
             )
-        except Exception:
+        except LLMError:
             await db.rollback()
             yield _event(
                 "error",

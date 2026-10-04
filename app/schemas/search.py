@@ -52,9 +52,24 @@ class SearchResultOut(CamelModel):
     rank: int
 
 
+class RetrievalRouteOut(CamelModel):
+    query: str = Field(min_length=1, max_length=4000)
+    document_ids: list[uuid.UUID] = Field(min_length=1)
+
+
 class SearchResponse(CamelModel):
     original_query: str
     rewritten_query: str
     results: list[SearchResultOut]
     degraded_reasons: list[str] = Field(default_factory=list)
-    debug: dict[str, object] | None = None
+    retrieval_queries: list[str] = Field(default_factory=list)
+    retrieval_routes: list[RetrievalRouteOut] = Field(default_factory=list)
+    retrieval_workflow: Literal["single_pass", "bounded_refinement", "routed_multi_search"] = (
+        "single_pass"
+    )
+    debug: dict[str, object] | None = Field(
+        default=None,
+        description="Opt-in stage trace: snapshot_id, policy, dense/bm25/rrf/rerank, "
+        "candidate_chunk_ids, selected, selection_decisions, table_expansions, timings_ms. "
+        "Contains identifiers and scores, not paper text.",
+    )

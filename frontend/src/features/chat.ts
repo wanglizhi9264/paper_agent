@@ -69,6 +69,9 @@ export interface SSEState {
   sources: ChatSource[];
   citations: ChatCitation[];
   degradedReasons: string[];
+  retrievalQueries: string[];
+  retrievalRoutes: Array<{ query: string; document_ids: string[] }>;
+  retrievalWorkflow: "single_pass" | "bounded_refinement" | "routed_multi_search";
   error: string | null;
   requestId: string | null;
 }
@@ -80,6 +83,9 @@ export function useChatStream() {
     sources: [],
     citations: [],
     degradedReasons: [],
+    retrievalQueries: [],
+    retrievalRoutes: [],
+    retrievalWorkflow: "single_pass",
     error: null,
     requestId: null,
   });
@@ -92,6 +98,9 @@ export function useChatStream() {
         sources: [],
         citations: [],
         degradedReasons: [],
+        retrievalQueries: [],
+        retrievalRoutes: [],
+        retrievalWorkflow: "single_pass",
         error: null,
         requestId: null,
       });
@@ -103,6 +112,12 @@ export function useChatStream() {
             setState((s) => ({
               ...s,
               requestId: (evt.data.request_id as string) ?? null,
+              retrievalQueries: (evt.data.retrieval_queries as string[]) ?? [],
+              retrievalRoutes:
+                (evt.data.retrieval_routes as SSEState["retrievalRoutes"]) ?? [],
+              retrievalWorkflow:
+                (evt.data.retrieval_workflow as SSEState["retrievalWorkflow"]) ??
+                "single_pass",
             }));
           } else if (evt.event === "sources") {
             const sources = (evt.data.sources as ChatSource[]) ?? [];
@@ -149,6 +164,9 @@ export function useChatStream() {
       sources: [],
       citations: [],
       degradedReasons: [],
+      retrievalQueries: [],
+      retrievalRoutes: [],
+      retrievalWorkflow: "single_pass",
       error: null,
       requestId: null,
     });

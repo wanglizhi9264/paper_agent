@@ -18,6 +18,9 @@ export function AppShell() {
           <NavLink to="/health" className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}>
             Health
           </NavLink>
+          <NavLink to="/gold-review" className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}>
+            Gold 审视
+          </NavLink>
         </nav>
       </aside>
       <main className="main">
