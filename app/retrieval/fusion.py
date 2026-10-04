@@ -4,6 +4,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
+RankedPair = tuple[int, float]
+RankedCandidate = tuple[int, float, str]
+
 
 @dataclass
 class RetrievalResult:
@@ -103,3 +106,63 @@ def rrf_fuse_many(
         ),
     )
     return [(faiss_id, score, best_source[faiss_id]) for faiss_id, score in result[:top_k]]
+
+
+def merge_ranked_views_best_rank(
+    ranked_views: Sequence[Sequence[RankedPair]],
+) -> list[RankedPair]:
+    """Merge query views of one retriever by each document's best 1-based rank.
+
+    Scores are carried from the winning occurrence for diagnostics only. Ordering
+    is best rank, declaration order of the winning view, then FAISS id.
+    """
+    best: dict[int, tuple[int, int, float]] = {}
+    for view_order, results in enumerate(ranked_views):
+        seen: set[int] = set()
+        for rank, (faiss_id, score) in enumerate(results, start=1):
+            if faiss_id in seen:
+                continue
+            seen.add(faiss_id)
+            candidate = (rank, view_order, score)
+            previous = best.get(faiss_id)
+            if previous is None or candidate[:2] < previous[:2]:
+                best[faiss_id] = candidate
+    ordered = sorted(best, key=lambda faiss_id: (*best[faiss_id][:2], faiss_id))
+    return [(faiss_id, best[faiss_id][2]) for faiss_id in ordered]
+
+
+def build_rerank_candidate_pool(
+    fused: Sequence[RankedCandidate],
+    dense_merged: Sequence[RankedPair],
+    bm25_merged: Sequence[RankedPair],
+    *,
+    fused_depth: int,
+    rescue_strategy: str = "off",
+    rescue_top_m: int = 10,
+) -> tuple[list[RankedCandidate], dict[int, str]]:
+    """Build a deterministic reranker pool and audit each candidate's origin."""
+    if fused_depth < 0 or rescue_top_m < 0:
+        raise ValueError("Candidate depths must be non-negative")
+    if rescue_strategy not in {"off", "retriever_top_m"}:
+        raise ValueError("Invalid candidate rescue strategy")
+
+    pool = list(fused[:fused_depth])
+    origins: dict[int, set[str]] = {row[0]: {"rrf"} for row in pool}
+    by_id = {row[0]: row for row in pool}
+    if rescue_strategy == "retriever_top_m":
+        for source, rows in (
+            ("dense_rescue", dense_merged[:rescue_top_m]),
+            ("bm25_rescue", bm25_merged[:rescue_top_m]),
+        ):
+            for faiss_id, score in rows:
+                origins.setdefault(faiss_id, set()).add(source)
+                if faiss_id not in by_id:
+                    candidate = (faiss_id, score, source)
+                    by_id[faiss_id] = candidate
+                    pool.append(candidate)
+
+    labels = {
+        faiss_id: next(iter(values)) if len(values) == 1 else "multiple"
+        for faiss_id, values in origins.items()
+    }
+    return pool, labels

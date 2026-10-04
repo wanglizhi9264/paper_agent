@@ -20,7 +20,12 @@ from app.models.index_snapshot import IndexSnapshot, SystemState
 from app.rerank import RerankError, get_reranker
 from app.retrieval.bm25 import BM25Index
 from app.retrieval.evidence import EvidenceCandidate, rank_candidates, select_evidence
-from app.retrieval.fusion import rrf_fuse, rrf_fuse_many
+from app.retrieval.fusion import (
+    build_rerank_candidate_pool,
+    merge_ranked_views_best_rank,
+    rrf_fuse,
+    rrf_fuse_many,
+)
 from app.retrieval.table import TableContextChunk, expand_table_context
 from app.schemas.search import SearchRequest, SearchResponse, SearchResultOut
 from app.services.retrieval_queries import RetrievalQueries
@@ -142,6 +147,17 @@ async def search_corpus(
 
     dense = dense_lists["original"]
     sparse = sparse_lists["original"]
+    dual_enabled = query_plan.english is not None
+    dense_merged = (
+        merge_ranked_views_best_rank([dense_lists["original"], dense_lists["english"]])
+        if dual_enabled
+        else dense
+    )
+    bm25_merged = (
+        merge_ranked_views_best_rank([sparse_lists["original"], sparse_lists["english"]])
+        if dual_enabled
+        else sparse
+    )
     if query_plan.english is None:
         timings["embedding"] = timings["embedding_original"]
         timings["dense"] = timings["dense_original"]
@@ -159,8 +175,10 @@ async def search_corpus(
             ),
         )
     stage_started = perf_counter()
-    if query_plan.english is None:
+    if not dual_enabled:
         fused = rrf_fuse(dense, sparse, top_k=fusion_top_k)
+    elif settings.retrieval_cross_language_fusion == "retriever_best_rank_rrf":
+        fused = rrf_fuse(dense_merged, bm25_merged, top_k=fusion_top_k)
     else:
         fused = rrf_fuse_many(
             [
@@ -172,16 +190,35 @@ async def search_corpus(
             top_k=fusion_top_k,
         )
     timings["fusion"] = (perf_counter() - stage_started) * 1000
+    stage_started = perf_counter()
+    if dual_enabled:
+        rerank_pool, candidate_origins = build_rerank_candidate_pool(
+            fused,
+            dense_merged,
+            bm25_merged,
+            fused_depth=settings.retrieval_rerank_top_k,
+            rescue_strategy=settings.retrieval_candidate_rescue,
+            rescue_top_m=settings.retrieval_candidate_rescue_top_m,
+        )
+    else:
+        rerank_pool = list(fused)
+        candidate_origins = {row[0]: "rrf" for row in rerank_pool}
+    timings["rescue"] = (perf_counter() - stage_started) * 1000
     if query_plan.translation_attempted:
         timings["translation"] = translation_latency_ms
     degraded_reasons: list[str] = []
-    ranked = fused
+    ranked = rerank_pool
+    rerank_query = (
+        query_plan.english or request.query
+        if dual_enabled and settings.retrieval_rerank_query == "english_if_available"
+        else request.query
+    )
     stage_started = perf_counter()
     try:
         reranker = get_reranker(settings)
-        passages = [by_faiss[faiss_id][0].retrieval_content for faiss_id, _, _ in fused]
-        rerank_scores = reranker.rerank(request.query, passages)
-        ranked = rank_candidates(fused, rerank_scores)
+        passages = [by_faiss[faiss_id][0].retrieval_content for faiss_id, _, _ in rerank_pool]
+        rerank_scores = reranker.rerank(rerank_query, passages)
+        ranked = rank_candidates(rerank_pool, rerank_scores)
     except RerankError:
         degraded_reasons.append("RERANK_UNAVAILABLE")
     timings["rerank"] = (perf_counter() - stage_started) * 1000
@@ -245,7 +282,7 @@ async def search_corpus(
                 rank=rank,
             )
         )
-    debug = None
+    debug: dict[str, object] | None = None
     if request.debug:
         debug = {
             "dense": dense,
@@ -254,13 +291,26 @@ async def search_corpus(
             "dense_english": dense_lists.get("english", []),
             "bm25_original": sparse_lists["original"],
             "bm25_english": sparse_lists.get("english", []),
+            "dense_merged": dense_merged if dual_enabled else None,
+            "bm25_merged": bm25_merged if dual_enabled else None,
             "rrf": fused,
+            "fused": fused,
+            "fusion_strategy": (
+                settings.retrieval_cross_language_fusion
+                if dual_enabled
+                else "standard_two_source_rrf"
+            ),
+            "rescue_strategy": (settings.retrieval_candidate_rescue if dual_enabled else "off"),
+            "rescued_candidates": [
+                {"faiss_id": row[0], "source": candidate_origins[row[0]]} for row in rerank_pool
+            ],
             "table_expansions": expansions,
             "snapshot_id": str(snapshot.id),
             "policy": {
                 "dense_top_k": settings.retrieval_dense_top_k,
                 "bm25_top_k": settings.retrieval_bm25_top_k,
                 "rrf_top_k": settings.retrieval_rrf_top_k,
+                "rerank_top_k": settings.retrieval_rerank_top_k,
                 "selection": settings.retrieval_selection,
                 "document_balance": settings.retrieval_document_balance,
                 "cross_language_retrieval": query_plan.mode,
@@ -270,7 +320,13 @@ async def search_corpus(
                 "original": query_plan.original,
                 "english": query_plan.english,
             },
-            "reranker_query": request.query,
+            "rerank_query_strategy": (
+                settings.retrieval_rerank_query if dual_enabled else "original"
+            ),
+            "rerank_query": rerank_query,
+            "reranker_query": rerank_query,
+            "rerank_input_count": len(rerank_pool),
+            "rerank_input": rerank_pool,
             "rerank": ranked,
             "selected": selection.selected,
             "selection_decisions": [
@@ -289,7 +345,10 @@ async def search_corpus(
                         *(row[0] for row in sparse),
                         *(row[0] for row in dense_lists.get("english", [])),
                         *(row[0] for row in sparse_lists.get("english", [])),
+                        *(row[0] for row in dense_merged),
+                        *(row[0] for row in bm25_merged),
                         *(row[0] for row in fused),
+                        *(row[0] for row in rerank_pool),
                         *(row[0] for row in ranked),
                         *(row[0] for row in selection.selected),
                     }

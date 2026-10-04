@@ -53,6 +53,13 @@ class Settings(BaseSettings):
     retrieval_dense_top_k: int = Field(default=30, ge=20, le=200)
     retrieval_bm25_top_k: int = Field(default=30, ge=20, le=200)
     retrieval_rrf_top_k: int = Field(default=30, ge=20, le=200)
+    retrieval_rerank_top_k: int = Field(default=30, ge=1, le=200)
+    retrieval_cross_language_fusion: Literal["four_way_rrf", "retriever_best_rank_rrf"] = (
+        "four_way_rrf"
+    )
+    retrieval_candidate_rescue: Literal["off", "retriever_top_m"] = "off"
+    retrieval_candidate_rescue_top_m: int = Field(default=10, ge=1, le=100)
+    retrieval_rerank_query: Literal["original", "english_if_available"] = "original"
     retrieval_selection: Literal["legacy", "cell_coverage"] = "legacy"
     retrieval_document_balance: Literal["off", "explicit_scope"] = "explicit_scope"
     chat_retrieval_workflow: Literal["single_pass", "bounded_refinement", "routed_multi_search"] = (

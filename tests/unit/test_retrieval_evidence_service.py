@@ -129,6 +129,16 @@ async def test_dual_query_runs_four_scoped_lists_and_audits_queries(
         return original_search(self, query, *args, **kwargs)
 
     monkeypatch.setattr(BM25Index, "search", recording_search)
+    rerank_calls: list[tuple[str, int]] = []
+
+    class RecordingReranker:
+        def rerank(self, query, passages):
+            rerank_calls.append((query, len(passages)))
+            return [float(len(passages) - index) for index in range(len(passages))]
+
+    monkeypatch.setattr(
+        "app.services.retrieval.get_reranker", lambda _settings: RecordingReranker()
+    )
     original = "比较 testing retrieval 的结果"
     english = "Compare testing retrieval results"
     scope = SearchScope(type="documents", document_ids=[docs[0].id])
@@ -150,6 +160,11 @@ async def test_dual_query_runs_four_scoped_lists_and_audits_queries(
                 "retrieval_dense_top_k": 100,
                 "retrieval_bm25_top_k": 100,
                 "retrieval_rrf_top_k": 80,
+                "retrieval_rerank_top_k": 2,
+                "retrieval_cross_language_fusion": "retriever_best_rank_rrf",
+                "retrieval_candidate_rescue": "retriever_top_m",
+                "retrieval_candidate_rescue_top_m": 1,
+                "retrieval_rerank_query": "english_if_available",
             }
         ),
     )
@@ -162,7 +177,17 @@ async def test_dual_query_runs_four_scoped_lists_and_audits_queries(
     debug = response.debug
     assert debug is not None
     assert debug["retrieval_queries"] == {"original": original, "english": english}
-    assert debug["reranker_query"] == original
+    assert rerank_calls
+    assert rerank_calls[0][0] == english
+    assert rerank_calls[0][1] == debug["rerank_input_count"]
+    assert len(response.results) <= 10
+    assert debug["rerank_query"] == english
+    assert debug["rerank_query_strategy"] == "english_if_available"
+    assert debug["fusion_strategy"] == "retriever_best_rank_rrf"
+    assert debug["rescue_strategy"] == "retriever_top_m"
+    assert debug["dense_merged"]
+    assert debug["bm25_merged"]
+    assert debug["rescued_candidates"]
     assert debug["policy"]["cross_language_retrieval"] == "cjk_to_english_dual"
     assert debug["timings_ms"]["translation"] == 12.5
     for stage in ("dense_original", "dense_english", "bm25_original", "bm25_english"):
@@ -186,6 +211,15 @@ async def test_explicit_original_only_plan_preserves_default_ranking(
         request,
         adapter,
         retrieval_queries=RetrievalQueries(original=request.query),
+        settings=get_settings().model_copy(
+            update={
+                "retrieval_cross_language_fusion": "retriever_best_rank_rrf",
+                "retrieval_candidate_rescue": "retriever_top_m",
+                "retrieval_candidate_rescue_top_m": 1,
+                "retrieval_rerank_top_k": 1,
+                "retrieval_rerank_query": "english_if_available",
+            }
+        ),
     )
 
     assert [result.chunk_id for result in default.results] == [
@@ -194,6 +228,9 @@ async def test_explicit_original_only_plan_preserves_default_ranking(
     assert default.debug["dense"] == explicit.debug["dense"]
     assert default.debug["bm25"] == explicit.debug["bm25"]
     assert default.debug["rrf"] == explicit.debug["rrf"]
+    assert explicit.debug["fusion_strategy"] == "standard_two_source_rrf"
+    assert explicit.debug["rescue_strategy"] == "off"
+    assert explicit.debug["rerank_query"] == request.query
 
 
 @pytest.mark.parametrize("failure", ["unavailable", "invalid_scores", "programming_bug"])

@@ -24,6 +24,11 @@ def test_defaults_loaded_from_test_env() -> None:
     assert settings.chat_planner_reasoning_effort == "none"
     assert settings.chat_rewrite_language == "preserve"
     assert settings.chat_cross_language_retrieval == "off"
+    assert settings.retrieval_cross_language_fusion == "four_way_rrf"
+    assert settings.retrieval_candidate_rescue == "off"
+    assert settings.retrieval_candidate_rescue_top_m == 10
+    assert settings.retrieval_rerank_top_k == 30
+    assert settings.retrieval_rerank_query == "original"
     assert (
         settings.retrieval_dense_top_k
         == settings.retrieval_bm25_top_k
@@ -49,6 +54,11 @@ def test_defaults_loaded_from_test_env() -> None:
         {"chat_planner_reasoning_effort": "ultra"},
         {"chat_rewrite_language": "translate_everything"},
         {"chat_cross_language_retrieval": "always_translate"},
+        {"retrieval_cross_language_fusion": "weighted"},
+        {"retrieval_candidate_rescue": "all"},
+        {"retrieval_candidate_rescue_top_m": 0},
+        {"retrieval_rerank_top_k": 0},
+        {"retrieval_rerank_query": "ensemble"},
         {"rerank_batch_size": 0},
         {"rerank_max_tokens": 0},
     ],

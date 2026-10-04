@@ -592,6 +592,26 @@ English query 只是同一意图的第二个检索视图，不替换原 query，
 - 默认值只有在预先声明的 dev decision rule 通过并完成独立验收后才可考虑调整；无论 A/B
   结果如何，本切片不得修改 Gold、扩大 scope、重建 index 或改变 BM25 analyzer。
 
+### 14.10 Dual-query ranking 实验开关（2026-10-04）
+
+Dual-query 可在不改变默认行为的前提下实验 fusion、candidate rescue、rerank depth 和
+reranker query language。所有开关仅在实际生成 English retrieval query 时生效；`off`、非 CJK
+或翻译失败必须保持既有双路检索和 rerank 行为。
+
+- `retrieval_cross_language_fusion=four_way_rrf` 保留 §14.9 的四路等权 RRF 默认；实验值
+  `retriever_best_rank_rrf` 先在 Dense 两个 query view 内按最优 1-based rank 合并，BM25 同理，
+  再执行标准双源 RRF。相同 best rank 按 query view 声明顺序、FAISS ID 稳定排序，不归一化分数。
+- `retrieval_candidate_rescue=off` 为默认；实验值 `retriever_top_m` 将 fused prefix 与 Dense/BM25
+  merged 各自 top-M 取并集并去重后交给同一个 reranker。rescue 不绕过 reranker，不扩大最终
+  `top_k`，debug 必须标记 `rrf`、`dense_rescue`、`bm25_rescue` 或 `multiple` 来源。
+- `retrieval_rerank_top_k` 独立表示 fused prefix 的 reranker 输入深度；retrieval source depth、
+  fusion output depth、reranker input depth 和最终 response `top_k` 不得再混为一个参数。
+- `retrieval_rerank_query=original` 为默认；`english_if_available` 只改变 reranker query，缺少
+  English view 时回退 original。不得执行双 reranker ensemble。
+- debug 记录 merged lists、fusion/rescue 策略、完整 rerank input、实际 rerank query 和各阶段耗时；
+  不记录论文全文。任何 production 默认切换都必须先只在 answerable dev 锁定候选，再经人工批准
+  执行一次 frozen-test gate；不得使用 frozen test 调参。
+
 ## 15. Generation 与 Citation
 
 `LLMProvider` 必须提供异步 `generate()` 和 `stream()`，业务代码只依赖统一 message、timeout、usage 和 finish reason 模型。
@@ -726,6 +746,11 @@ event: error      data: {error:{code,message,request_id}}
 | `PAPER_RAG_LLM_API_KEY` | Ollama 可为占位值；其他服务必需 |
 | `PAPER_RAG_LLM_CONTEXT_TOKENS` | `8192` |
 | `PAPER_RAG_CHAT_CROSS_LANGUAGE_RETRIEVAL` | `off`；可选 `cjk_to_english_dual` |
+| `PAPER_RAG_RETRIEVAL_CROSS_LANGUAGE_FUSION` | `four_way_rrf`；实验值 `retriever_best_rank_rrf` |
+| `PAPER_RAG_RETRIEVAL_CANDIDATE_RESCUE` | `off`；实验值 `retriever_top_m` |
+| `PAPER_RAG_RETRIEVAL_CANDIDATE_RESCUE_TOP_M` | `10` |
+| `PAPER_RAG_RETRIEVAL_RERANK_TOP_K` | `30`；仅 dual-query 实验覆写，非 dual 保持历史行为 |
+| `PAPER_RAG_RETRIEVAL_RERANK_QUERY` | `original`；实验值 `english_if_available` |
 | `PAPER_RAG_CUDA_DEVICE` | `cuda:0` |
 | `PAPER_RAG_GPU_MAX_CONCURRENCY` | `1` |
 | `PAPER_RAG_LOG_LEVEL` | `INFO` |

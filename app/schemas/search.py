@@ -70,7 +70,8 @@ class SearchResponse(CamelModel):
     debug: dict[str, object] | None = Field(
         default=None,
         description="Opt-in stage trace: snapshot_id, policy, original/English retrieval "
-        "queries, four Dense/BM25 lists, rrf/rerank, candidate_chunk_ids, selected, "
-        "selection_decisions, table_expansions, timings_ms. "
+        "queries, four Dense/BM25 lists, retriever-level merged lists, fusion strategy, "
+        "fused/rescued/rerank candidates, actual rerank query, candidate_chunk_ids, "
+        "selected, selection_decisions, table_expansions, timings_ms. "
         "Contains identifiers and scores, not paper text.",
     )

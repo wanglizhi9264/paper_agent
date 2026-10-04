@@ -428,3 +428,16 @@ query；最后增加 dev-only 深度诊断 CLI，在同 snapshot/model/scope/dep
 Top-100 per-Gold ranks、candidate miss 和既有 13 个 hard-miss slice。冻结 test 不参与此次方案
 选择，Gold、parser/chunker、index 和 BM25 analyzer 均不修改。只有预注册 decision rule 通过时
 结论才是 `KEEP OPT-IN`；否则为 `REJECT`，默认值在本切片中始终保持 `off`。
+
+## 24. 2026-10-04 Dual-query ranking 后续实验
+
+在 §23 已证明 raw candidate recall 提升后，只对 ranking pipeline 增加可回滚实验开关：同一
+retriever 内 best-rank view merge、Dense/BM25 top-M candidate rescue、独立 reranker 输入深度和
+reranker query language。实现保持四路 RRF、rescue off、depth 30、original query 为默认，且新
+开关仅在有效 English query 存在时生效。
+
+实验按 Fusion → Rescue → Depth 30/50/80/100 → Query language 顺序，仅运行 standard-v2 的
+37 道 answerable dev。每阶段只继承上一阶段胜者，避免全组合搜索；记录 raw/fused/rescued/final
+recall、MRR、nDCG、hard-13、失败阶段、延迟和 rerank Gold/false-positive 对照。frozen test、
+Citation、Gold、parser/chunker、index、BM25 analyzer、routing 和 prompt 不进入本轮。dev 胜者只
+能成为下一次 frozen-test gate 候选，不能自动改变 production 默认。
