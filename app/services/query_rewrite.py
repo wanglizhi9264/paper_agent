@@ -9,7 +9,7 @@ from typing import Literal
 
 from pydantic import ValidationError
 
-from app.llm.base import LLMError, LLMMessage, LLMProvider
+from app.llm.base import LLMError, LLMMessage, LLMProvider, ReasoningEffort
 from app.llm.prompts import build_rewrite_prompt
 from app.schemas.rewrite import StructuredRewrite
 from app.schemas.search import SearchScope
@@ -53,6 +53,7 @@ async def rewrite_query(
     scope: SearchScope,
     *,
     language_strategy: Literal["preserve", "english_for_cjk"] = "preserve",
+    reasoning_effort: ReasoningEffort | None = None,
 ) -> RewriteOutcome:
     rewrite_to_english = _should_rewrite_to_english(query, language_strategy)
     if not history and not rewrite_to_english:
@@ -65,7 +66,10 @@ async def rewrite_query(
     )
     try:
         response = await provider.generate(
-            [LLMMessage(role="user", content=prompt)], temperature=0.0, max_tokens=500
+            [LLMMessage(role="user", content=prompt)],
+            temperature=0.0,
+            max_tokens=500,
+            reasoning_effort=reasoning_effort,
         )
         rewrite = StructuredRewrite.model_validate(_json_payload(response.text))
         return RewriteOutcome(rewrite=rewrite, degraded_reasons=[])

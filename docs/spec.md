@@ -508,7 +508,7 @@ Content:
 - evidence planner 输出预算由 `chat_refinement_max_tokens` 控制，默认 600，范围
   128..1024；该预算包含 reasoning model 的 reasoning tokens，禁止因空 content 无界重试。
 - `chat_planner_reasoning_effort=provider_default|none|low|high|max` 只作用于结构化
-  evidence/document planner，不改变 query rewrite 与最终回答；默认 `none`。支持该参数的
+  query rewrite、evidence planner 与 document planner，不改变最终回答；默认 `none`。支持该参数的
   provider 应关闭 planner thinking，避免 reasoning tokens 吃完小型 JSON 输出预算；不支持的
   OpenAI-compatible provider 可显式设为 `provider_default`。不得把 reasoning content 写入日志。
 - 首轮 query 使用结构化 rewrite 的 `retrieval_query`。planner 只读取该 rewrite 和最多
@@ -529,6 +529,8 @@ Content:
   结构化 rewrite，要求 standalone query 使用英文并原样保留论文名、模型名、数据集、
   数字与指标；生成阶段仍使用用户原问题。rewrite 失败必须回退原问题并记录
   `REWRITE_FAILED`，不得扩大 session scope。非 CJK 单轮问题不得为此增加 LLM 调用。
+  结构化 rewrite 必须沿用 `chat_planner_reasoning_effort`，避免 provider thinking 消耗完整
+  JSON 输出预算；该参数不得影响最终答案生成。
 - 此工作流不新增持久化 checkpoint，不替代 PostgreSQL/ARQ，也不得被描述为 durable
   Agent。后续若需要可恢复长任务，必须另行设计状态机、取消、重试和迁移。
 

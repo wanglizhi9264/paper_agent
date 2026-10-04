@@ -14,8 +14,8 @@
 
 当前 DeepSeek thinking 默认为开启。对一条 cross-paper dev 题的独立 probe 中，600、1024、
 2048、4096 completion tokens 均被 reasoning 消耗，`content` 为空且 `finish_reason=length`。
-仅对结构化 planner 发送 `reasoning_effort=none` 后，同一请求使用 351 prompt tokens、107
-completion tokens 返回合法 JSON。query rewrite 与最终回答不受该参数影响。
+仅对结构化 planner/rewrite 发送 `reasoning_effort=none` 后，同一 routing 请求使用 351
+prompt tokens、107 completion tokens 返回合法 JSON。最终回答不受该参数影响。
 DeepSeek 官方说明 `reasoning_effort=none` 可关闭 Chat Completions thinking：
 <https://api-docs.deepseek.com/guides/thinking_mode/>。
 
@@ -73,3 +73,16 @@ rerank 硬降级。
 3. `routed_multi_search` 继续保留为 opt-in；默认仍为 `single_pass`，不运行 frozen test、不切换发布配置。
 4. 下一步若继续，应先让 route plan 输出确定性提高并重复 dev；锁定方案后才能运行一次 frozen test
    和 Full Pipeline Citation P/R，不能按 test 结果反向调参。
+
+## 后续本地诊断
+
+- 六道 cross-paper dev 上，确定性逐文档同 query 的 Recall/MRR 为 0.1944/0.1333；标题追加
+  降至 0.1389/0.0655，逐文档 wide80 仍为 0.1944 且 MRR 略降。将 bounded 结果与逐文档
+  结果离线 RRF 后 Recall 仍为 0.2500，仅 MRR 从 0.1019 增至 0.1208。额外两次检索没有
+  Recall 收益，因此不进入生产。
+- 四道 multi-turn dev 的纯本地检索中，当前追问、用户历史拼接、冻结 expected standalone
+  query 的 Recall@10 均为 0.2500；oracle rewrite 也没有增加 Recall。因此不根据 dev oracle
+  修改 rewrite 内容，只修复结构化 rewrite 的 thinking 兼容性。
+- 首次 Full Pipeline 的 37 道 answerable dev 中，17 道检索命中 Gold，14 道 citation 命中。
+  三道“检索命中但 citation 未命中”的 Gold rank 为 2、9、10；其中一题引用了 rank 1–8
+  和 10，却漏掉 rank 9。没有证据支持扩大 citation 正确范围或用更多 marker 修饰低质量排序。

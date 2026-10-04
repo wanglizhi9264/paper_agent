@@ -75,6 +75,11 @@ async def _prepare(
         body.query,
         scope,
         language_strategy=settings.chat_rewrite_language,
+        reasoning_effort=(
+            None
+            if settings.chat_planner_reasoning_effort == "provider_default"
+            else settings.chat_planner_reasoning_effort
+        ),
     )
     user = Message(session_id=item.id, role=MessageRole.USER, content=body.query)
     db.add(user)

@@ -11,9 +11,11 @@ class RewriteProvider:
     def __init__(self, text: str) -> None:
         self.text = text
         self.messages: list[LLMMessage] = []
+        self.kwargs: dict[str, object] = {}
 
-    async def generate(self, messages: list[LLMMessage], **_kwargs: object) -> LLMResponse:
+    async def generate(self, messages: list[LLMMessage], **kwargs: object) -> LLMResponse:
         self.messages = messages
+        self.kwargs = kwargs
         return LLMResponse(text=self.text)
 
 
@@ -79,6 +81,24 @@ async def test_invalid_rewrite_falls_back_to_original_query() -> None:
 
     assert result.rewrite.standalone_query == "original"
     assert result.degraded_reasons == ["REWRITE_FAILED"]
+
+
+@pytest.mark.asyncio
+async def test_structured_rewrite_can_disable_provider_reasoning() -> None:
+    provider = RewriteProvider(
+        '{"standalone_query":"standalone","paper_hints":[],"dataset_hints":[],'
+        '"method_hints":[],"metric_hints":[]}'
+    )
+
+    await rewrite_query(
+        provider,
+        [("user", "context")],
+        "follow-up",
+        SearchScope(type="all"),
+        reasoning_effort="none",
+    )
+
+    assert provider.kwargs["reasoning_effort"] == "none"
 
 
 @pytest.mark.asyncio
