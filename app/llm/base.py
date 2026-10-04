@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import Protocol, runtime_checkable
+from typing import Literal, Protocol, runtime_checkable
+
+ReasoningEffort = Literal["none", "low", "high", "max"]
 
 
 @dataclass
@@ -56,6 +58,7 @@ class LLMProvider(Protocol):
         temperature: float = 0.3,
         max_tokens: int | None = None,
         timeout: float | None = None,
+        reasoning_effort: ReasoningEffort | None = None,
     ) -> LLMResponse: ...
 
     def stream(

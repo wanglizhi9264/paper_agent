@@ -507,6 +507,10 @@ Content:
   改变 Session scope 或调用任意外部工具。
 - evidence planner 输出预算由 `chat_refinement_max_tokens` 控制，默认 600，范围
   128..1024；该预算包含 reasoning model 的 reasoning tokens，禁止因空 content 无界重试。
+- `chat_planner_reasoning_effort=provider_default|none|low|high|max` 只作用于结构化
+  evidence/document planner，不改变 query rewrite 与最终回答；默认 `none`。支持该参数的
+  provider 应关闭 planner thinking，避免 reasoning tokens 吃完小型 JSON 输出预算；不支持的
+  OpenAI-compatible provider 可显式设为 `provider_default`。不得把 reasoning content 写入日志。
 - 首轮 query 使用结构化 rewrite 的 `retrieval_query`。planner 只读取该 rewrite 和最多
   6 条首轮候选的 title/section/page/每条最多 600 字符原文；它只能判断直接证据是否
   充分，并在缺失时给出最多 1 条补充 query，不得回答问题或增加来源中不存在的事实。
@@ -547,6 +551,10 @@ Content:
 - 系统始终保留一次原始 scope 的 primary search。成功的 routed searches 与 primary 只按
   1-based rank 做 RRF（`k=60`），沿用 Chunk/hash/cell coverage 去重。若 routed 文档数不超过
   `top_k`，最终列表为每个成功 route 保留至少一个真实候选，再按融合顺序回填；不伪造 Chunk。
+- 单文档 scope 不调用 document router，直接复用 `bounded_refinement`。多文档 route 的合法
+  输出低于置信度门槛时同样回退 bounded refinement，并保留
+  `DOCUMENT_ROUTE_LOW_CONFIDENCE` 审计码；route plan 无法解析或越界时只保留 primary，
+  不以第二次 planner 调用掩盖依赖失败。
 - planner 或单条 routed search 失败不丢弃 primary。稳定降级码为
   `DOCUMENT_ROUTE_PLAN_FAILED`、`DOCUMENT_ROUTE_SCOPE_REJECTED`、
   `DOCUMENT_ROUTE_LOW_CONFIDENCE`、`DOCUMENT_ROUTE_SEARCH_FAILED`。

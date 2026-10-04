@@ -13,6 +13,7 @@ import json
 import os
 import subprocess
 import sys
+from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -38,6 +39,14 @@ from eval.evidence_selection import retrieval_query
 from eval.pdf_v2_release import validate_resolved_dataset
 
 WORKFLOWS = ("single_pass", "bounded_refinement", "routed_multi_search")
+PLANNER_FALLBACK_REASONS = frozenset(
+    {
+        "EVIDENCE_PLAN_FAILED",
+        "DOCUMENT_ROUTE_PLAN_FAILED",
+        "DOCUMENT_ROUTE_SCOPE_REJECTED",
+        "DOCUMENT_ROUTE_LOW_CONFIDENCE",
+    }
+)
 
 
 def score_retrieval(gold: set[str], retrieved: list[str]) -> dict[str, float]:
@@ -50,9 +59,10 @@ def score_retrieval(gold: set[str], retrieved: list[str]) -> dict[str, float]:
     }
 
 
-def summarize(rows: list[dict[str, Any]]) -> dict[str, float | int]:
+def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
     if not rows:
         raise ValueError("Cannot summarize an empty evaluation")
+    reason_counts = Counter(reason for row in rows for reason in row.get("degraded_reasons", []))
     return {
         "n": len(rows),
         "recall@10": sum(float(row["recall@10"]) for row in rows) / len(rows),
@@ -60,6 +70,8 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, float | int]:
         "mean_retrieval_calls": sum(int(row["retrieval_calls"]) for row in rows) / len(rows),
         "refinement_rate": sum(int(row["retrieval_calls"]) == 2 for row in rows) / len(rows),
         "multi_search_rate": sum(int(row["retrieval_calls"]) > 1 for row in rows) / len(rows),
+        "planner_fallback_rate": sum(bool(row.get("degraded_reasons")) for row in rows) / len(rows),
+        "planner_fallback_reasons": dict(sorted(reason_counts.items())),
     }
 
 
@@ -123,8 +135,12 @@ async def evaluate(dataset: Path) -> dict[str, Any]:
                     original_query=item["question"],
                     top_k=10,
                 )
-                if response.degraded_reasons:
-                    raise ValueError(f"Evaluation degraded: {response.degraded_reasons}")
+                unexpected_degradation = set(response.degraded_reasons) - PLANNER_FALLBACK_REASONS
+                if unexpected_degradation:
+                    raise ValueError(
+                        f"Evaluation degraded for {item['id']} / {workflow}: "
+                        f"{sorted(unexpected_degradation)}"
+                    )
                 retrieved = [str(result.chunk_id) for result in response.results]
                 rows[workflow].append(
                     {
@@ -132,6 +148,7 @@ async def evaluate(dataset: Path) -> dict[str, Any]:
                         "question_type": item["question_type"],
                         **score_retrieval(gold, retrieved),
                         "retrieval_calls": len(response.retrieval_queries),
+                        "degraded_reasons": response.degraded_reasons,
                         "retrieved_chunk_ids": retrieved,
                         "gold_ranks": {
                             chunk_id: retrieved.index(chunk_id) + 1
@@ -167,6 +184,11 @@ async def evaluate(dataset: Path) -> dict[str, Any]:
         "planner_max_tokens": {
             "refinement": settings.chat_refinement_max_tokens,
             "routing": settings.chat_routing_max_tokens,
+        },
+        "planner_reasoning_effort": settings.chat_planner_reasoning_effort,
+        "routing_policy": {
+            "max_documents": settings.chat_routing_max_documents,
+            "min_confidence": settings.chat_routing_min_confidence,
         },
         "workflows": {
             workflow: {"summary": summarize(values), "questions": values}

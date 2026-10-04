@@ -408,3 +408,9 @@ evaluation 才作为新 baseline，v1 历史指标不得直接与 v2 混称为�
 审计轨迹与前端状态；最后只在 frozen answerable dev 比较 single/refinement/routed。路由器不读取
 Gold、答案或 Retriever 结果，不改变 ingestion/index/benchmark，也不扩大 Session scope。
 真实 A/B 未证明净收益前，`.env` 和代码默认值保持 `single_pass`。
+
+真实 DeepSeek dev A/B 发现默认 thinking 会耗尽 600–4096 输出 token 而不产生 content；按
+官方 Chat Completions 契约仅对 planner 发送 `reasoning_effort=none` 后，600-token JSON 输出稳定。
+最终 workflow 采用自适应组合：单文档直接 bounded refinement；多文档先 route；route 低置信度
+回退 bounded refinement。置信度 0.30 相比 0.65 没有增加 Recall 且成本更高，因此保留 0.65。
+两次相同配置 dev 重复表明 routed Recall 有方差，默认仍不切换，test 继续保持未触碰。

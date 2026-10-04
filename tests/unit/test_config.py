@@ -21,6 +21,7 @@ def test_defaults_loaded_from_test_env() -> None:
     assert settings.chat_routing_max_documents == 3
     assert settings.chat_routing_min_confidence == 0.65
     assert settings.chat_routing_max_tokens == 600
+    assert settings.chat_planner_reasoning_effort == "none"
     assert settings.chat_rewrite_language == "preserve"
     assert (
         settings.retrieval_dense_top_k
@@ -44,6 +45,7 @@ def test_defaults_loaded_from_test_env() -> None:
         {"chat_routing_max_documents": 7},
         {"chat_routing_min_confidence": 1.1},
         {"chat_routing_max_tokens": 64},
+        {"chat_planner_reasoning_effort": "ultra"},
         {"chat_rewrite_language": "translate_everything"},
         {"rerank_batch_size": 0},
         {"rerank_max_tokens": 0},

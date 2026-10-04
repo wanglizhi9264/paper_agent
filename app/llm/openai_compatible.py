@@ -3,7 +3,15 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from typing import Any, cast
 
-from app.llm.base import LLMError, LLMMessage, LLMProvider, LLMResponse, LLMUsage, StreamChunk
+from app.llm.base import (
+    LLMError,
+    LLMMessage,
+    LLMProvider,
+    LLMResponse,
+    LLMUsage,
+    ReasoningEffort,
+    StreamChunk,
+)
 
 
 class FakeLLMProvider:
@@ -26,6 +34,7 @@ class FakeLLMProvider:
         temperature: float = 0.3,
         max_tokens: int | None = None,
         timeout: float | None = None,
+        reasoning_effort: ReasoningEffort | None = None,
     ) -> LLMResponse:
         return LLMResponse(
             text=self._template,
@@ -87,13 +96,20 @@ class OpenAICompatibleProvider:
         temperature: float = 0.3,
         max_tokens: int | None = None,
         timeout: float | None = None,
+        reasoning_effort: ReasoningEffort | None = None,
     ) -> LLMResponse:
         import json
 
         import httpx
 
         try:
-            payload = self._build_payload(messages, temperature, max_tokens, stream=False)
+            payload = self._build_payload(
+                messages,
+                temperature,
+                max_tokens,
+                stream=False,
+                reasoning_effort=reasoning_effort,
+            )
             async with httpx.AsyncClient(timeout=timeout or self._timeout) as client:
                 resp = await client.post(
                     f"{self._base_url}/chat/completions",
@@ -171,6 +187,7 @@ class OpenAICompatibleProvider:
         temperature: float,
         max_tokens: int | None,
         stream: bool,
+        reasoning_effort: ReasoningEffort | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "model": self._model,
@@ -180,6 +197,8 @@ class OpenAICompatibleProvider:
         }
         if max_tokens is not None:
             payload["max_tokens"] = max_tokens
+        if reasoning_effort is not None:
+            payload["reasoning_effort"] = reasoning_effort
         return payload
 
 

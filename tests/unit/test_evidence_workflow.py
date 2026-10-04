@@ -63,6 +63,19 @@ class PlanProvider:
         return LLMResponse(text=self.text)
 
 
+class AdaptivePlanProvider:
+    def __init__(self, routing_text: str, refinement_text: str) -> None:
+        self.routing_text = routing_text
+        self.refinement_text = refinement_text
+        self.calls: list[list[LLMMessage]] = []
+
+    async def generate(self, messages: list[LLMMessage], **_kwargs: object) -> LLMResponse:
+        self.calls.append(messages)
+        if "Allowed document catalog" in messages[0].content:
+            return LLMResponse(text=self.routing_text)
+        return LLMResponse(text=self.refinement_text)
+
+
 class RecordingSearch:
     def __init__(
         self,
@@ -364,26 +377,7 @@ async def test_routed_search_uses_only_allowed_single_document_scopes() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("plan", "reason"),
-    [
-        (
-            {
-                "confidence": 0.2,
-                "routes": [{"document_id": str(uuid.UUID(int=801)), "subquery": "x"}],
-            },
-            "DOCUMENT_ROUTE_LOW_CONFIDENCE",
-        ),
-        (
-            {
-                "confidence": 0.9,
-                "routes": [{"document_id": str(uuid.UUID(int=999)), "subquery": "x"}],
-            },
-            "DOCUMENT_ROUTE_SCOPE_REJECTED",
-        ),
-    ],
-)
-async def test_route_plan_fails_closed_to_primary(plan: dict[str, object], reason: str) -> None:
+async def test_out_of_scope_route_fails_closed_to_primary() -> None:
     document_a = uuid.UUID(int=801)
     document_b = uuid.UUID(int=802)
     primary = _response("primary", [_result(1, "primary", rank=1, document_id=document_a)])
@@ -394,7 +388,14 @@ async def test_route_plan_fails_closed_to_primary(plan: dict[str, object], reaso
         _rewrite(),
         SearchScope(type="documents", document_ids=[document_a, document_b]),
         FakeEmbeddingAdapter(),
-        PlanProvider(__import__("json").dumps(plan)),  # type: ignore[arg-type]
+        PlanProvider(
+            __import__("json").dumps(
+                {
+                    "confidence": 0.9,
+                    "routes": [{"document_id": str(uuid.UUID(int=999)), "subquery": "x"}],
+                }
+            )
+        ),  # type: ignore[arg-type]
         _settings("routed_multi_search"),
         original_query="original",
         search_runner=search,
@@ -405,9 +406,78 @@ async def test_route_plan_fails_closed_to_primary(plan: dict[str, object], reaso
     )
 
     assert len(search.calls) == 1
-    assert response.degraded_reasons == [reason]
+    assert response.degraded_reasons == ["DOCUMENT_ROUTE_SCOPE_REJECTED"]
     assert response.retrieval_routes == []
     assert [item.chunk_id for item in response.results] == [uuid.UUID(int=1)]
+
+
+@pytest.mark.asyncio
+async def test_low_confidence_route_falls_back_to_bounded_refinement() -> None:
+    document_a = uuid.UUID(int=801)
+    document_b = uuid.UUID(int=802)
+    primary = _response("primary", [_result(1, "primary", rank=1, document_id=document_a)])
+    refined = _response("focused", [_result(2, "focused", rank=1, document_id=document_b)])
+    search = RecordingSearch([primary, refined])
+    planner = AdaptivePlanProvider(
+        __import__("json").dumps(
+            {
+                "confidence": 0.2,
+                "routes": [{"document_id": str(document_a), "subquery": "paper A metric"}],
+            }
+        ),
+        '{"evidence_sufficient":false,"subquery":"focused"}',
+    )
+
+    response = await gather_chat_evidence(
+        cast(AsyncSession, object()),
+        _rewrite(),
+        SearchScope(type="documents", document_ids=[document_a, document_b]),
+        FakeEmbeddingAdapter(),
+        planner,  # type: ignore[arg-type]
+        _settings("routed_multi_search"),
+        original_query="original",
+        search_runner=search,
+        routing_documents=[
+            RoutingDocument(document_id=document_a, title="Paper A"),
+            RoutingDocument(document_id=document_b, title="Paper B"),
+        ],
+    )
+
+    assert len(planner.calls) == 2
+    assert [call[1] for call in search.calls] == [
+        SearchScope(type="documents", document_ids=[document_a, document_b]),
+        SearchScope(type="documents", document_ids=[document_a, document_b]),
+    ]
+    assert response.degraded_reasons == ["DOCUMENT_ROUTE_LOW_CONFIDENCE"]
+    assert response.retrieval_queries == [_rewrite().retrieval_query(), "focused"]
+
+
+@pytest.mark.asyncio
+async def test_single_document_routed_workflow_uses_bounded_refinement_directly() -> None:
+    document_a = uuid.UUID(int=801)
+    primary = _response("primary", [_result(1, "primary", rank=1, document_id=document_a)])
+    refined = _response("focused", [_result(2, "focused", rank=1, document_id=document_a)])
+    search = RecordingSearch([primary, refined])
+    planner = PlanProvider('{"evidence_sufficient":false,"subquery":"focused"}')
+    scope = SearchScope(type="documents", document_ids=[document_a])
+
+    response = await gather_chat_evidence(
+        cast(AsyncSession, object()),
+        _rewrite(),
+        scope,
+        FakeEmbeddingAdapter(),
+        planner,  # type: ignore[arg-type]
+        _settings("routed_multi_search"),
+        original_query="original",
+        search_runner=search,
+        routing_documents=[RoutingDocument(document_id=document_a, title="Paper A")],
+    )
+
+    assert len(planner.calls) == 1
+    assert len(search.calls) == 2
+    assert search.calls[1][1] == scope
+    assert response.retrieval_workflow == "routed_multi_search"
+    assert response.retrieval_queries == [_rewrite().retrieval_query(), "focused"]
 
 
 def test_merge_can_preserve_one_candidate_per_routed_document() -> None:

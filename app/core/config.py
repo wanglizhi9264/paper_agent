@@ -62,6 +62,9 @@ class Settings(BaseSettings):
     chat_routing_max_documents: int = Field(default=3, ge=1, le=6)
     chat_routing_min_confidence: float = Field(default=0.65, ge=0.0, le=1.0)
     chat_routing_max_tokens: int = Field(default=600, ge=128, le=1024)
+    chat_planner_reasoning_effort: Literal["provider_default", "none", "low", "high", "max"] = (
+        "none"
+    )
     chat_rewrite_language: Literal["preserve", "english_for_cjk"] = "preserve"
 
     # --- Generator (OpenAI-compatible) ---

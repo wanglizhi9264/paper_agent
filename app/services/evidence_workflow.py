@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.errors import AppError
 from app.core.config import Settings
 from app.embedding.base import EmbeddingError, EmbeddingProvider
-from app.llm.base import LLMError, LLMMessage, LLMProvider
+from app.llm.base import LLMError, LLMMessage, LLMProvider, ReasoningEffort
 from app.llm.prompts import build_document_routing_prompt, build_evidence_refinement_prompt
 from app.models.collection import CollectionDocument
 from app.models.document import Document
@@ -103,6 +103,7 @@ async def plan_evidence_refinement(
     primary: SearchResponse,
     *,
     max_tokens: int = 600,
+    reasoning_effort: ReasoningEffort | None = None,
 ) -> RefinementOutcome:
     prompt = build_evidence_refinement_prompt(
         rewrite.model_dump_json(),
@@ -114,6 +115,7 @@ async def plan_evidence_refinement(
             [LLMMessage(role="user", content=prompt)],
             temperature=0.0,
             max_tokens=max_tokens,
+            reasoning_effort=reasoning_effort,
         )
         plan = EvidenceRefinementPlan.model_validate(_json_payload(response.text))
     except (LLMError, json.JSONDecodeError, ValidationError):
@@ -129,6 +131,7 @@ async def plan_document_routes(
     max_routes: int,
     min_confidence: float,
     max_tokens: int,
+    reasoning_effort: ReasoningEffort | None,
 ) -> RoutingOutcome:
     """Ask the LLM for bounded routes, then enforce the server-owned scope."""
     catalog = [
@@ -145,6 +148,7 @@ async def plan_document_routes(
             [LLMMessage(role="user", content=prompt)],
             temperature=0.0,
             max_tokens=max_tokens,
+            reasoning_effort=reasoning_effort,
         )
         plan = DocumentRoutingPlan.model_validate(_json_payload(response.text))
     except (LLMError, json.JSONDecodeError, ValidationError):
@@ -184,6 +188,12 @@ def _dedup_key(result: SearchResultOut, strategy: str) -> tuple[str, ...]:
     if strategy == "cell_coverage":
         return (str(result.document_id), str(result.element_id or ""), digest)
     return (digest,)
+
+
+def _planner_reasoning_effort(settings: Settings) -> ReasoningEffort | None:
+    if settings.chat_planner_reasoning_effort == "provider_default":
+        return None
+    return settings.chat_planner_reasoning_effort
 
 
 def merge_search_responses(
@@ -285,6 +295,7 @@ def merge_search_responses(
 async def _gather_routed_evidence(
     session: AsyncSession,
     rewrite: StructuredRewrite,
+    scope: SearchScope,
     embedding_provider: EmbeddingProvider,
     llm_provider: LLMProvider,
     settings: Settings,
@@ -295,8 +306,6 @@ async def _gather_routed_evidence(
     original_query: str,
     top_k: int,
 ) -> SearchResponse:
-    if len(documents) < 2:
-        return primary
     primary_query = rewrite.retrieval_query()
     planned_routes = await plan_document_routes(
         llm_provider,
@@ -305,8 +314,23 @@ async def _gather_routed_evidence(
         max_routes=settings.chat_routing_max_documents,
         min_confidence=settings.chat_routing_min_confidence,
         max_tokens=settings.chat_routing_max_tokens,
+        reasoning_effort=_planner_reasoning_effort(settings),
     )
     if planned_routes.plan is None:
+        if planned_routes.degraded_reasons == ["DOCUMENT_ROUTE_LOW_CONFIDENCE"]:
+            refined = await _gather_refined_evidence(
+                session,
+                rewrite,
+                scope,
+                embedding_provider,
+                llm_provider,
+                settings,
+                primary,
+                runner,
+                original_query=original_query,
+                top_k=top_k,
+            )
+            return _with_degraded(refined, planned_routes.degraded_reasons)
         return _with_degraded(primary, planned_routes.degraded_reasons)
 
     responses = [primary]
@@ -373,6 +397,7 @@ async def _gather_refined_evidence(
         rewrite,
         primary,
         max_tokens=settings.chat_refinement_max_tokens,
+        reasoning_effort=_planner_reasoning_effort(settings),
     )
     if planned.plan is None:
         return _with_degraded(primary, planned.degraded_reasons)
@@ -444,9 +469,23 @@ async def gather_chat_evidence(
             if routing_documents is not None
             else await _routing_documents_for_scope(session, scope)
         )
+        if len(documents) < 2:
+            return await _gather_refined_evidence(
+                session,
+                rewrite,
+                scope,
+                embedding_provider,
+                llm_provider,
+                settings,
+                primary,
+                runner,
+                original_query=original_query,
+                top_k=top_k,
+            )
         return await _gather_routed_evidence(
             session,
             rewrite,
+            scope,
             embedding_provider,
             llm_provider,
             settings,

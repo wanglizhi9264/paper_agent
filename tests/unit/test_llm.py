@@ -97,6 +97,20 @@ def test_build_messages() -> None:
     assert messages[3].content == "q2"
 
 
+def test_openai_payload_can_disable_reasoning_for_structured_planners() -> None:
+    provider = OpenAICompatibleProvider("http://127.0.0.1:1/v1", "secret", "model")
+
+    payload = provider._build_payload(
+        [LLMMessage(role="user", content="route")],
+        temperature=0.0,
+        max_tokens=600,
+        stream=False,
+        reasoning_effort="none",
+    )
+
+    assert payload["reasoning_effort"] == "none"
+
+
 def test_parse_citations_valid() -> None:
     text = "Answer [1] with detail [2]."
     cmap = {1: "chunk-a", 2: "chunk-b"}
