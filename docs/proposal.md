@@ -441,3 +441,14 @@ reranker query language。实现保持四路 RRF、rescue off、depth 30、origi
 recall、MRR、nDCG、hard-13、失败阶段、延迟和 rerank Gold/false-positive 对照。frozen test、
 Citation、Gold、parser/chunker、index、BM25 analyzer、routing 和 prompt 不进入本轮。dev 胜者只
 能成为下一次 frozen-test gate 候选，不能自动改变 production 默认。
+
+## 25. 2026-10-05 Candidate promotion 与 Citation grounding 诊断
+
+在 frozen gate 失败后只回到 standard-v2 dev，冻结既有模型、索引、Gold、BM25、routing 与
+prompt。Candidate promotion 只比较每来源 top-M 的 M=2/3/5，并把 reranker 输入硬限制为 30；
+若不能同时降低 `LOST_BEFORE_RERANK_DEPTH` 且维持最终排序指标，则拒绝该方向并保持默认关闭。
+
+Citation 诊断先修正评测可观测性：Full Pipeline 预测必须保存生成时实际 sources 的 Chunk IDs，
+不能把另一次 search 或 retrieval-only trace 当作 LLM context。仅在 answerable dev 上输出私有
+逐题内容诊断，公开报告只保留聚合统计。Claim-evidence grounding 是否进入下一阶段由实际
+context miss/citation miss 分解决定；本切片不自动过滤引用，也不改变 generation production 默认。

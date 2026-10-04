@@ -166,3 +166,60 @@ def build_rerank_candidate_pool(
         for faiss_id, values in origins.items()
     }
     return pool, labels
+
+
+def build_source_aware_candidate_pool(
+    main_candidates: Sequence[RankedCandidate],
+    source_lists: Sequence[tuple[str, Sequence[RankedPair]]],
+    *,
+    total_depth: int,
+    per_source_top_m: int,
+) -> tuple[list[RankedCandidate], dict[int, str]]:
+    """Reserve source-specific candidates, then fill a strict-size reranker pool.
+
+    Membership is selected source-first so every declared source receives its quota.
+    Returned order preserves the main candidate order, followed by promoted candidates
+    in source declaration/rank order. Scores are diagnostic only before reranking.
+    """
+    if total_depth < 0 or per_source_top_m < 0:
+        raise ValueError("Candidate depths must be non-negative")
+
+    origins: dict[int, set[str]] = {}
+    reserved_rows: dict[int, RankedCandidate] = {}
+    reserved_order: list[int] = []
+    for source, rows in source_lists:
+        seen_in_source: set[int] = set()
+        for faiss_id, score in rows[:per_source_top_m]:
+            if faiss_id in seen_in_source:
+                continue
+            seen_in_source.add(faiss_id)
+            origins.setdefault(faiss_id, set()).add(source)
+            if faiss_id not in reserved_rows:
+                reserved_rows[faiss_id] = (faiss_id, score, source)
+                reserved_order.append(faiss_id)
+
+    selected_ids = set(reserved_order[:total_depth])
+    for faiss_id, _score, _source in main_candidates:
+        if len(selected_ids) >= total_depth:
+            break
+        selected_ids.add(faiss_id)
+
+    pool: list[RankedCandidate] = []
+    emitted: set[int] = set()
+    for row in main_candidates:
+        faiss_id = row[0]
+        if faiss_id in selected_ids and faiss_id not in emitted:
+            pool.append(row)
+            emitted.add(faiss_id)
+            origins.setdefault(faiss_id, set()).add("main")
+    for faiss_id in reserved_order:
+        if faiss_id in selected_ids and faiss_id not in emitted:
+            pool.append(reserved_rows[faiss_id])
+            emitted.add(faiss_id)
+
+    labels = {
+        faiss_id: next(iter(values)) if len(values) == 1 else "multiple"
+        for faiss_id, values in origins.items()
+        if faiss_id in emitted
+    }
+    return pool, labels

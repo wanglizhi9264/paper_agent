@@ -27,6 +27,8 @@ def test_defaults_loaded_from_test_env() -> None:
     assert settings.retrieval_cross_language_fusion == "four_way_rrf"
     assert settings.retrieval_candidate_rescue == "off"
     assert settings.retrieval_candidate_rescue_top_m == 10
+    assert settings.retrieval_candidate_promotion == "off"
+    assert settings.retrieval_candidate_promotion_top_m == 3
     assert settings.retrieval_rerank_top_k == 30
     assert settings.retrieval_rerank_query == "original"
     assert (
@@ -57,6 +59,8 @@ def test_defaults_loaded_from_test_env() -> None:
         {"retrieval_cross_language_fusion": "weighted"},
         {"retrieval_candidate_rescue": "all"},
         {"retrieval_candidate_rescue_top_m": 0},
+        {"retrieval_candidate_promotion": "learned"},
+        {"retrieval_candidate_promotion_top_m": 0},
         {"retrieval_rerank_top_k": 0},
         {"retrieval_rerank_query": "ensemble"},
         {"rerank_batch_size": 0},

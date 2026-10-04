@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from eval.frozen_test_gate import citation_diagnostics
 
 
@@ -19,17 +21,17 @@ def test_citation_diagnostics_separates_retrieval_and_citation_losses() -> None:
     predictions = [
         {
             "id": "miss",
-            "retrieved_chunk_ids": ["other"],
+            "context_chunk_ids": ["other"],
             "predicted_citation_chunk_ids": [],
         },
         {
             "id": "citation-miss",
-            "retrieved_chunk_ids": ["gold", "other"],
+            "context_chunk_ids": ["gold", "other"],
             "predicted_citation_chunk_ids": ["other"],
         },
         {
             "id": "hit",
-            "retrieved_chunk_ids": ["gold"],
+            "context_chunk_ids": ["gold"],
             "predicted_citation_chunk_ids": ["gold"],
         },
     ]
@@ -46,3 +48,17 @@ def test_citation_diagnostics_separates_retrieval_and_citation_losses() -> None:
     assert detail["gold_evidence_rank"] == {"gold": 1}
     assert detail["generated_citations"] == ["other"]
     assert detail["missed_gold_chunks"] == ["gold"]
+
+
+def test_citation_diagnostics_refuses_a_separate_retrieval_trace_as_context() -> None:
+    with pytest.raises(ValueError, match="context_chunk_ids"):
+        citation_diagnostics(
+            [_item()],
+            [
+                {
+                    "id": "q1",
+                    "retrieved_chunk_ids": ["gold"],
+                    "predicted_citation_chunk_ids": [],
+                }
+            ],
+        )

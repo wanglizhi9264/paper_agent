@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.retrieval.fusion import (
     build_rerank_candidate_pool,
+    build_source_aware_candidate_pool,
     merge_ranked_views_best_rank,
     rrf_fuse,
     rrf_fuse_many,
@@ -184,3 +185,37 @@ def test_candidate_rescue_off_preserves_fused_depth() -> None:
 
     assert pool == fused[:2]
     assert origins == {1: "rrf", 2: "rrf"}
+
+
+def test_source_aware_pool_reserves_each_source_and_stays_at_depth() -> None:
+    main = [(index, 1.0 / index, "rrf") for index in range(1, 11)]
+    pool, origins = build_source_aware_candidate_pool(
+        main,
+        [
+            ("dense_original", [(20, 0.9), (1, 0.8)]),
+            ("dense_english", [(21, 0.9), (2, 0.8)]),
+            ("bm25_original", [(22, 9.0), (3, 8.0)]),
+            ("bm25_english", [(23, 9.0), (4, 8.0)]),
+        ],
+        total_depth=8,
+        per_source_top_m=1,
+    )
+
+    assert len(pool) == 8
+    assert {row[0] for row in pool} == {1, 2, 3, 4, 20, 21, 22, 23}
+    assert origins[20] == "dense_original"
+    assert origins[1] == "main"
+
+
+def test_source_aware_pool_is_deterministic_and_deduplicates_views() -> None:
+    args = (
+        [(1, 0.5, "rrf"), (2, 0.4, "rrf"), (3, 0.3, "rrf")],
+        [("dense_original", [(4, 0.9), (1, 0.8)]), ("dense_english", [(4, 0.7)])],
+    )
+
+    first = build_source_aware_candidate_pool(*args, total_depth=3, per_source_top_m=1)
+    second = build_source_aware_candidate_pool(*args, total_depth=3, per_source_top_m=1)
+
+    assert first == second
+    assert [row[0] for row in first[0]] == [1, 2, 4]
+    assert first[1][4] == "multiple"

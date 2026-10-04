@@ -308,13 +308,17 @@ def citation_diagnostics(
     items: list[dict[str, Any]], predictions: list[dict[str, Any]]
 ) -> dict[str, Any]:
     by_id = {str(prediction["id"]): prediction for prediction in predictions}
-    counts = Counter()
+    counts: Counter[str] = Counter()
     misses: list[dict[str, Any]] = []
     for item in items:
         if not item["answerable"]:
             continue
         prediction = by_id[str(item["id"])]
-        retrieved = [str(value) for value in prediction.get("retrieved_chunk_ids") or []]
+        if "context_chunk_ids" not in prediction:
+            raise ValueError(
+                "Full Pipeline predictions must record context_chunk_ids for citation diagnostics"
+            )
+        retrieved = [str(value) for value in prediction.get("context_chunk_ids") or []]
         cited = [str(value) for value in prediction.get("predicted_citation_chunk_ids") or []]
         groups = resolved_groups(item)
         retrieval_hit = any(group_recall_at_k([group], retrieved, 10) == 1.0 for group in groups)

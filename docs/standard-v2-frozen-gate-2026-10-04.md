@@ -73,17 +73,21 @@ chat-only cross-language translation.
 
 ## Citation diagnostics
 
+> 2026-10-05 audit correction: the table below combined locked retrieval-only Top10 with citations
+> from a separate live chat request. The old prediction artifact did not save the actual source list
+> packed for generation, so these stage counts and named cases are retained only as historical output
+> and are **not valid actual-context citation diagnostics**. Citation Precision/Recall above remain
+> valid direct Gold-versus-cited-ID measurements. Frozen test was not rerun.
+
 | Category | Dev | Frozen Test | Overall |
 | --- | ---: | ---: | ---: |
 | Retrieval miss | 14 | 6 | 20 |
 | Retrieval hit + citation miss | 3 | 2 | 5 |
 | Retrieval hit + citation hit | 20 | 7 | 27 |
 
-The five retrieval-hit/citation-miss cases are `eval-012`, `eval-042`, `eval-048`, `holdout-011`
-and `holdout-015`. Exact Gold ranks, selected context ranks, generated citation Chunk IDs and missed
-Gold Chunk IDs remain in the ignored local `full-gate-score.json`; private labels are not committed.
-These cases prove citation selection is an independent bottleneck. Citation Precision also decreased
-slightly because generated answers cite many non-Gold context chunks.
+The five historical proxy cases cannot establish that Gold was present in the actual generation
+context. A later dev-only run with explicit `context_chunk_ids` supersedes the dev attribution; no
+replacement frozen attribution is available because the frozen test was not rerun.
 
 ## Failure analysis
 
@@ -92,8 +96,8 @@ slightly because generated answers cite many non-Gold context chunks.
   classified as a fusion-only loss.
 - Ranking/promotion is the main retrieval bottleneck: five frozen questions lose evidence before the
   fixed rerank input and one more is ranked out by the reranker.
-- Citation selection is independently weak: five answerable questions retrieve Gold but do not cite
-  it, and overall Citation Precision/Recall remain 19.30%/40.21%.
+- Citation quality remains below target at 19.30%/40.21%, but this run cannot reliably split that loss
+  between missing generation context and citation selection because actual context IDs were absent.
 
 The candidate improves retrieval, Citation Recall and rejection over the previous baseline, but it
 does not pass the approved release thresholds of Recall@10 >= 0.85, Citation Precision >= 0.95 and

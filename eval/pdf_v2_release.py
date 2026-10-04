@@ -159,6 +159,7 @@ def run_predictions(
                 {
                     "id": item["id"],
                     "retrieved_chunk_ids": list(value.get("retrieved_chunk_ids") or []),
+                    "context_chunk_ids": list(value.get("context_chunk_ids") or []),
                     "predicted_citation_chunk_ids": list(
                         value.get("predicted_citation_chunk_ids") or []
                     ),
@@ -173,6 +174,7 @@ def run_predictions(
                 {
                     "id": item["id"],
                     "retrieved_chunk_ids": [],
+                    "context_chunk_ids": [],
                     "predicted_citation_chunk_ids": [],
                     "rejected_unanswerable": False,
                     "answer": "",
@@ -376,6 +378,7 @@ class LiveAPIAdapter:
             )
             chat.raise_for_status()
             body = chat.json()
+            context_chunk_ids = [value["chunk_id"] for value in body.get("sources", [])]
             rewritten_query = body.get("rewritten_query") or item["question"]
             search = self._client.post(
                 "/api/v1/search",
@@ -388,6 +391,7 @@ class LiveAPIAdapter:
         cited = [value["chunk_id"] for value in body.get("citations", [])]
         return {
             "retrieved_chunk_ids": retrieved,
+            "context_chunk_ids": context_chunk_ids,
             "predicted_citation_chunk_ids": cited,
             "answer": body.get("answer", ""),
             "rejected_unanswerable": _is_rejection(body.get("answer", ""), cited),
@@ -426,7 +430,10 @@ def _write_report(
     (output / "release-evidence.json").write_text(
         json.dumps(evidence, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8"
     )
-    metric_values = metrics["metrics"]
+    raw_metric_values = metrics["metrics"]
+    if not isinstance(raw_metric_values, dict):
+        raise TypeError("Release metrics payload must contain a metrics object")
+    metric_values: dict[str, float] = raw_metric_values
     lines = [
         "# PDF Ingestion V2 Release Report",
         "",

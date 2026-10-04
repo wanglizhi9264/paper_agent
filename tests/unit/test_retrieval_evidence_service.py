@@ -164,6 +164,8 @@ async def test_dual_query_runs_four_scoped_lists_and_audits_queries(
                 "retrieval_cross_language_fusion": "retriever_best_rank_rrf",
                 "retrieval_candidate_rescue": "retriever_top_m",
                 "retrieval_candidate_rescue_top_m": 1,
+                "retrieval_candidate_promotion": "source_top_m",
+                "retrieval_candidate_promotion_top_m": 1,
                 "retrieval_rerank_query": "english_if_available",
             }
         ),
@@ -185,9 +187,12 @@ async def test_dual_query_runs_four_scoped_lists_and_audits_queries(
     assert debug["rerank_query_strategy"] == "english_if_available"
     assert debug["fusion_strategy"] == "retriever_best_rank_rrf"
     assert debug["rescue_strategy"] == "retriever_top_m"
+    assert debug["promotion_strategy"] == "source_top_m"
+    assert debug["rerank_input_count"] == 2
     assert debug["dense_merged"]
     assert debug["bm25_merged"]
     assert debug["rescued_candidates"]
+    assert debug["promoted_candidates"]
     assert debug["policy"]["cross_language_retrieval"] == "cjk_to_english_dual"
     assert debug["timings_ms"]["translation"] == 12.5
     for stage in ("dense_original", "dense_english", "bm25_original", "bm25_english"):
@@ -221,6 +226,19 @@ async def test_explicit_original_only_plan_preserves_default_ranking(
             }
         ),
     )
+    promoted = await search_corpus(
+        async_sqlite_session,
+        request,
+        adapter,
+        retrieval_queries=RetrievalQueries(original=request.query),
+        settings=get_settings().model_copy(
+            update={
+                "retrieval_candidate_promotion": "source_top_m",
+                "retrieval_candidate_promotion_top_m": 1,
+                "retrieval_rerank_top_k": 1,
+            }
+        ),
+    )
 
     assert [result.chunk_id for result in default.results] == [
         result.chunk_id for result in explicit.results
@@ -230,7 +248,11 @@ async def test_explicit_original_only_plan_preserves_default_ranking(
     assert default.debug["rrf"] == explicit.debug["rrf"]
     assert explicit.debug["fusion_strategy"] == "standard_two_source_rrf"
     assert explicit.debug["rescue_strategy"] == "off"
+    assert explicit.debug["promotion_strategy"] == "off"
     assert explicit.debug["rerank_query"] == request.query
+    assert promoted.debug is not None
+    assert promoted.debug["promotion_strategy"] == "source_top_m"
+    assert promoted.debug["rerank_input_count"] == 1
 
 
 @pytest.mark.parametrize("failure", ["unavailable", "invalid_scores", "programming_bug"])

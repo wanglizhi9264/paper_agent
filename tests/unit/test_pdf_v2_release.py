@@ -44,6 +44,10 @@ class _FakeLiveClient:
                 {
                     "answer": "answer [1]",
                     "citations": [{"chunk_id": "chunk-1"}],
+                    "sources": [
+                        {"chunk_id": "chunk-1"},
+                        {"chunk_id": "neighbor-chunk"},
+                    ],
                     "rewritten_query": "standalone query",
                 }
             )
@@ -142,6 +146,7 @@ def test_live_adapter_scores_retrieval_after_history_aware_query_rewrite() -> No
     ]
     assert search_calls[0][2]["query"] == "standalone query"
     assert prediction["retrieved_chunk_ids"] == ["chunk-1"]
+    assert prediction["context_chunk_ids"] == ["chunk-1", "neighbor-chunk"]
     assert prediction["predicted_citation_chunk_ids"] == ["chunk-1"]
 
 

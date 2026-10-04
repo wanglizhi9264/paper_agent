@@ -22,6 +22,7 @@ from app.retrieval.bm25 import BM25Index
 from app.retrieval.evidence import EvidenceCandidate, rank_candidates, select_evidence
 from app.retrieval.fusion import (
     build_rerank_candidate_pool,
+    build_source_aware_candidate_pool,
     merge_ranked_views_best_rank,
     rrf_fuse,
     rrf_fuse_many,
@@ -204,6 +205,28 @@ async def search_corpus(
         rerank_pool = list(fused)
         candidate_origins = {row[0]: "rrf" for row in rerank_pool}
     timings["rescue"] = (perf_counter() - stage_started) * 1000
+    rescued_pool = list(rerank_pool)
+    rescue_origins = dict(candidate_origins)
+    stage_started = perf_counter()
+    if settings.retrieval_candidate_promotion == "source_top_m":
+        promotion_sources = [
+            ("dense_original", dense_lists["original"]),
+            ("bm25_original", sparse_lists["original"]),
+        ]
+        if dual_enabled:
+            promotion_sources = [
+                ("dense_original", dense_lists["original"]),
+                ("dense_english", dense_lists["english"]),
+                ("bm25_original", sparse_lists["original"]),
+                ("bm25_english", sparse_lists["english"]),
+            ]
+        rerank_pool, candidate_origins = build_source_aware_candidate_pool(
+            rerank_pool,
+            promotion_sources,
+            total_depth=settings.retrieval_rerank_top_k,
+            per_source_top_m=settings.retrieval_candidate_promotion_top_m,
+        )
+    timings["promotion"] = (perf_counter() - stage_started) * 1000
     if query_plan.translation_attempted:
         timings["translation"] = translation_latency_ms
     degraded_reasons: list[str] = []
@@ -302,8 +325,17 @@ async def search_corpus(
             ),
             "rescue_strategy": (settings.retrieval_candidate_rescue if dual_enabled else "off"),
             "rescued_candidates": [
+                {"faiss_id": row[0], "source": rescue_origins[row[0]]} for row in rescued_pool
+            ],
+            "promoted_candidates": [
                 {"faiss_id": row[0], "source": candidate_origins[row[0]]} for row in rerank_pool
             ],
+            "promotion_strategy": (settings.retrieval_candidate_promotion),
+            "promotion_top_m": (
+                settings.retrieval_candidate_promotion_top_m
+                if settings.retrieval_candidate_promotion != "off"
+                else None
+            ),
             "table_expansions": expansions,
             "snapshot_id": str(snapshot.id),
             "policy": {
@@ -311,6 +343,7 @@ async def search_corpus(
                 "bm25_top_k": settings.retrieval_bm25_top_k,
                 "rrf_top_k": settings.retrieval_rrf_top_k,
                 "rerank_top_k": settings.retrieval_rerank_top_k,
+                "candidate_promotion": (settings.retrieval_candidate_promotion),
                 "selection": settings.retrieval_selection,
                 "document_balance": settings.retrieval_document_balance,
                 "cross_language_retrieval": query_plan.mode,

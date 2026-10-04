@@ -595,8 +595,10 @@ English query 只是同一意图的第二个检索视图，不替换原 query，
 ### 14.10 Dual-query ranking 实验开关（2026-10-04）
 
 Dual-query 可在不改变默认行为的前提下实验 fusion、candidate rescue、rerank depth 和
-reranker query language。所有开关仅在实际生成 English retrieval query 时生效；`off`、非 CJK
-或翻译失败必须保持既有双路检索和 rerank 行为。
+reranker query language。fusion/rescue/query-language 开关仅在实际生成 English retrieval
+query 时生效；`off`、非 CJK 或翻译失败必须保持既有双路检索和 rerank 行为。独立的
+source-aware promotion 在显式启用时使用当前实际存在的两路或四路 source，并始终受同一
+reranker depth 硬上限约束。
 
 - `retrieval_cross_language_fusion=four_way_rrf` 保留 §14.9 的四路等权 RRF 默认；实验值
   `retriever_best_rank_rrf` 先在 Dense 两个 query view 内按最优 1-based rank 合并，BM25 同理，
@@ -611,6 +613,10 @@ reranker query language。所有开关仅在实际生成 English retrieval query
 - debug 记录 merged lists、fusion/rescue 策略、完整 rerank input、实际 rerank query 和各阶段耗时；
   不记录论文全文。任何 production 默认切换都必须先只在 answerable dev 锁定候选，再经人工批准
   执行一次 frozen-test gate；不得使用 frozen test 调参。
+- `retrieval_candidate_promotion=off` 为默认；实验值 `source_top_m` 从当前实际执行的每个
+  retrieval source（original-only 为 Dense/BM25 两路，dual-query 为四路）各保留 top-M，再按
+  既有主候选顺序补齐。去重后 reranker 输入必须严格截断为 `retrieval_rerank_top_k`，不得借
+  promotion 隐式扩大 depth；debug 必须记录策略、M 和最终输入列表。
 
 ## 15. Generation 与 Citation
 
@@ -625,6 +631,11 @@ reranker query language。所有开关仅在实际生成 English retrieval query
   固定句并清空全部引用。SSE 在尚未判定该前缀前只允许短暂缓冲；一旦确认拒答，只发送
   固定句并抑制后续猜测与 citation marker，持久化内容必须与客户端可见内容一致；
 - HTTP/SSE 返回 answer text 与结构化 `citations[]`。
+
+Citation evaluation 必须单独保存生成请求实际打包的 `context_chunk_ids`。不得用随后发起的
+独立 search 请求、retrieval-only A/B 的 Top-K，或 reranker trace 代替生成 context；这些请求
+可能因 query rewrite、模型非确定性或配置隔离而不同。只有 Gold evidence group 完整出现在
+实际 `context_chunk_ids` 中，才可分类为 `GOLD_IN_CONTEXT_NOT_CITED`。
 
 Generation 失败不得保存成功 assistant message。超时返回稳定错误；客户端断开时取消上游请求并把 message 标记为 interrupted。
 
@@ -749,7 +760,9 @@ event: error      data: {error:{code,message,request_id}}
 | `PAPER_RAG_RETRIEVAL_CROSS_LANGUAGE_FUSION` | `four_way_rrf`；实验值 `retriever_best_rank_rrf` |
 | `PAPER_RAG_RETRIEVAL_CANDIDATE_RESCUE` | `off`；实验值 `retriever_top_m` |
 | `PAPER_RAG_RETRIEVAL_CANDIDATE_RESCUE_TOP_M` | `10` |
-| `PAPER_RAG_RETRIEVAL_RERANK_TOP_K` | `30`；仅 dual-query 实验覆写，非 dual 保持历史行为 |
+| `PAPER_RAG_RETRIEVAL_CANDIDATE_PROMOTION` | `off`；实验值 `source_top_m` |
+| `PAPER_RAG_RETRIEVAL_CANDIDATE_PROMOTION_TOP_M` | `3`；仅在 promotion 启用时使用 |
+| `PAPER_RAG_RETRIEVAL_RERANK_TOP_K` | `30`；实验候选池的 reranker 输入上限 |
 | `PAPER_RAG_RETRIEVAL_RERANK_QUERY` | `original`；实验值 `english_if_available` |
 | `PAPER_RAG_CUDA_DEVICE` | `cuda:0` |
 | `PAPER_RAG_GPU_MAX_CONCURRENCY` | `1` |

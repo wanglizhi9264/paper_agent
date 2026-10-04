@@ -59,6 +59,8 @@ class Settings(BaseSettings):
     )
     retrieval_candidate_rescue: Literal["off", "retriever_top_m"] = "off"
     retrieval_candidate_rescue_top_m: int = Field(default=10, ge=1, le=100)
+    retrieval_candidate_promotion: Literal["off", "source_top_m"] = "off"
+    retrieval_candidate_promotion_top_m: int = Field(default=3, ge=1, le=10)
     retrieval_rerank_query: Literal["original", "english_if_available"] = "original"
     retrieval_selection: Literal["legacy", "cell_coverage"] = "legacy"
     retrieval_document_balance: Literal["off", "explicit_scope"] = "explicit_scope"
