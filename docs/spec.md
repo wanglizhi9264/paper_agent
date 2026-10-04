@@ -566,6 +566,32 @@ Content:
 - 真实评测只在 answerable dev 上同时比较三种 workflow，严格使用 frozen Chunk-ID qrels；
   test 不参与选参，任何提升不得解释为修改 benchmark 或 Gold。
 
+### 14.9 CJK→English dual-query retrieval（2026-10-04）
+
+聊天链路可实验性启用 `chat_cross_language_retrieval=cjk_to_english_dual`；默认
+`off`。它与 §14.2 的多轮 standalone rewrite 分离：standalone query 是原始检索意图，
+English query 只是同一意图的第二个检索视图，不替换原 query，不改变回答语言或 scope。
+
+- `off` 和非 CJK query 都不得增加 LLM 调用，并保持既有 Dense/BM25/RRF/rerank 行为。
+  `/search` 永远不调用翻译模型。
+- CJK dual 模式使用独立严格 JSON prompt 生成 `english_query`；必须保留论文名、模型名、
+  数据集、方法、指标、缩写、公式、变量、数字和符号，不回答问题、不增加事实。无效 JSON、
+  provider 错误、与原 query 相同或仍含 CJK 时回退 original-only，并记录
+  `CROSS_LANGUAGE_REWRITE_FAILED`；程序错误不得吞掉。
+- 同一 immutable scope 和 active snapshot 内分别执行 Dense(original)、Dense(English)、
+  BM25(original)、BM25(English)。BM25 保持现有 analyzer；dual 模式禁止把两种语言拼成一个
+  sparse query。四个 rank list 用等权、1-based、`k=60` 的 deterministic RRF 融合；同一 ID
+  每个 list 最多贡献一次。旧双路 `rrf_fuse` 必须委托同一通用实现并保持历史 tie-break。
+- Cross-encoder reranker 继续使用 original standalone query，而不是 English query。debug trace
+  必须记录实际 original/English queries、四个候选列表、reranker query，以及 translation、
+  Dense、BM25、fusion、rerank、total latency；只记录标识和分数，不记录论文全文或 rationale。
+- 只在 frozen standard-v2 answerable dev 做 `off`/dual A/B；两组必须固定 snapshot、模型、
+  scope、candidate depth、RRF 与 rerank 参数。报告包含各阶段 Recall@1/3/5/10/30/50/100、
+  MRR、nDCG、每个 Gold rank、candidate union miss、既有 13 个 hard miss 切片和翻译失败率。
+  test 不参与选参；这是 retrieval-only 实验，不得伪报 Citation 指标或 release 通过。
+- 默认值只有在预先声明的 dev decision rule 通过并完成独立验收后才可考虑调整；无论 A/B
+  结果如何，本切片不得修改 Gold、扩大 scope、重建 index 或改变 BM25 analyzer。
+
 ## 15. Generation 与 Citation
 
 `LLMProvider` 必须提供异步 `generate()` 和 `stream()`，业务代码只依赖统一 message、timeout、usage 和 finish reason 模型。
@@ -699,6 +725,7 @@ event: error      data: {error:{code,message,request_id}}
 | `PAPER_RAG_LLM_MODEL` | `qwen3:4b-instruct` |
 | `PAPER_RAG_LLM_API_KEY` | Ollama 可为占位值；其他服务必需 |
 | `PAPER_RAG_LLM_CONTEXT_TOKENS` | `8192` |
+| `PAPER_RAG_CHAT_CROSS_LANGUAGE_RETRIEVAL` | `off`；可选 `cjk_to_english_dual` |
 | `PAPER_RAG_CUDA_DEVICE` | `cuda:0` |
 | `PAPER_RAG_GPU_MAX_CONCURRENCY` | `1` |
 | `PAPER_RAG_LOG_LEVEL` | `INFO` |

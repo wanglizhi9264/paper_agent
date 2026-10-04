@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.errors import DependencyUnavailableError
 from app.core.config import Settings, get_settings
 from app.embedding.fake import FakeEmbeddingAdapter
-from app.llm.base import LLMMessage, LLMResponse
+from app.llm.base import LLMError, LLMMessage, LLMResponse
 from app.schemas.rewrite import DocumentRoutingPlan, EvidenceRefinementPlan, StructuredRewrite
 from app.schemas.search import SearchResponse, SearchResultOut, SearchScope
 from app.services.evidence_workflow import (
@@ -18,6 +18,7 @@ from app.services.evidence_workflow import (
     gather_chat_evidence,
     merge_search_responses,
 )
+from app.services.retrieval_queries import RetrievalQueries
 
 
 def _result(
@@ -86,6 +87,8 @@ class RecordingSearch:
         self.responses = responses
         self.second_error = second_error
         self.calls: list[tuple[str, SearchScope, str | None]] = []
+        self.retrieval_query_plans: list[RetrievalQueries | None] = []
+        self.translation_latencies: list[float] = []
 
     async def __call__(
         self,
@@ -95,16 +98,20 @@ class RecordingSearch:
         *,
         original_query: str | None = None,
         settings: Settings | None = None,
+        retrieval_queries: RetrievalQueries | None = None,
+        translation_latency_ms: float = 0.0,
     ) -> SearchResponse:
         assert settings is not None
         self.calls.append((request.query, request.scope, original_query))
+        self.retrieval_query_plans.append(retrieval_queries)
+        self.translation_latencies.append(translation_latency_ms)
         if len(self.calls) == 2 and self.second_error is not None:
             raise self.second_error
         return self.responses[len(self.calls) - 1]
 
 
-def _settings(workflow: str) -> Settings:
-    return get_settings().model_copy(update={"chat_retrieval_workflow": workflow})
+def _settings(workflow: str, **overrides: object) -> Settings:
+    return get_settings().model_copy(update={"chat_retrieval_workflow": workflow, **overrides})
 
 
 def _rewrite() -> StructuredRewrite:
@@ -168,6 +175,72 @@ async def test_single_pass_never_calls_planner_or_second_search() -> None:
     assert planner.calls == []
     assert response.retrieval_workflow == "single_pass"
     assert response.retrieval_queries == [_rewrite().retrieval_query()]
+
+
+@pytest.mark.asyncio
+async def test_cjk_dual_query_is_passed_to_one_scoped_search() -> None:
+    search = RecordingSearch([_response("比较 FID", [_result(1, "alpha", rank=1)])])
+    provider = PlanProvider('{"english_query":"Compare FID for method A and method B"}')
+    scope = SearchScope(type="documents", document_ids=[uuid.UUID(int=101)])
+    rewrite = StructuredRewrite(standalone_query="比较方法 A 和方法 B 的 FID")
+
+    response = await gather_chat_evidence(
+        cast(AsyncSession, object()),
+        rewrite,
+        scope,
+        FakeEmbeddingAdapter(),
+        provider,  # type: ignore[arg-type]
+        _settings("single_pass", chat_cross_language_retrieval="cjk_to_english_dual"),
+        original_query="原始问题",
+        search_runner=search,
+    )
+
+    assert len(search.calls) == 1
+    assert search.calls[0][1] == scope
+    assert search.retrieval_query_plans == [
+        RetrievalQueries(
+            original="比较方法 A 和方法 B 的 FID",
+            english="Compare FID for method A and method B",
+            mode="cjk_to_english_dual",
+            translation_attempted=True,
+        )
+    ]
+    assert search.translation_latencies[0] >= 0
+    assert response.retrieval_queries == [
+        "比较方法 A 和方法 B 的 FID",
+        "Compare FID for method A and method B",
+    ]
+    assert response.degraded_reasons == []
+
+
+@pytest.mark.asyncio
+async def test_cjk_translation_failure_degrades_without_blocking_search() -> None:
+    search = RecordingSearch([_response("比较 FID", [_result(1, "alpha", rank=1)])])
+    provider = PlanProvider("", error=LLMError("temporary provider failure"))
+    scope = SearchScope(type="all")
+    rewrite = StructuredRewrite(standalone_query="比较方法 A 和方法 B 的 FID")
+
+    response = await gather_chat_evidence(
+        cast(AsyncSession, object()),
+        rewrite,
+        scope,
+        FakeEmbeddingAdapter(),
+        provider,  # type: ignore[arg-type]
+        _settings("single_pass", chat_cross_language_retrieval="cjk_to_english_dual"),
+        original_query="原始问题",
+        search_runner=search,
+    )
+
+    assert len(search.calls) == 1
+    assert search.retrieval_query_plans == [
+        RetrievalQueries(
+            original="比较方法 A 和方法 B 的 FID",
+            mode="cjk_to_english_dual",
+            translation_attempted=True,
+        )
+    ]
+    assert response.retrieval_queries == ["比较方法 A 和方法 B 的 FID"]
+    assert response.degraded_reasons == ["CROSS_LANGUAGE_REWRITE_FAILED"]
 
 
 @pytest.mark.asyncio

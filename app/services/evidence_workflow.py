@@ -34,6 +34,7 @@ from app.schemas.search import (
     SearchScope,
 )
 from app.services.retrieval import search_corpus
+from app.services.retrieval_queries import RetrievalQueries, build_retrieval_queries
 
 
 class SearchRunner(Protocol):
@@ -45,6 +46,8 @@ class SearchRunner(Protocol):
         *,
         original_query: str | None = None,
         settings: Settings | None = None,
+        retrieval_queries: RetrievalQueries | None = None,
+        translation_latency_ms: float = 0.0,
     ) -> SearchResponse: ...
 
 
@@ -335,7 +338,7 @@ async def _gather_routed_evidence(
 
     responses = [primary]
     successful_document_ids: set[uuid.UUID] = set()
-    retrieval_queries = [primary_query]
+    retrieval_queries = list(primary.retrieval_queries)
     retrieval_routes: list[RetrievalRouteOut] = []
     degraded = list(primary.degraded_reasons)
     for route in planned_routes.plan.routes:
@@ -354,7 +357,7 @@ async def _gather_routed_evidence(
             continue
         responses.append(routed)
         successful_document_ids.add(route.document_id)
-        retrieval_queries.append(route.subquery)
+        retrieval_queries.extend(routed.retrieval_queries or [route.subquery])
         retrieval_routes.append(
             RetrievalRouteOut(query=route.subquery, document_ids=[route.document_id])
         )
@@ -429,7 +432,7 @@ async def _gather_refined_evidence(
             selection_strategy=settings.retrieval_selection,
         ),
         degraded_reasons=degraded,
-        retrieval_queries=[primary_query, subquery],
+        retrieval_queries=[*primary.retrieval_queries, *(refined.retrieval_queries or [subquery])],
         retrieval_workflow=settings.chat_retrieval_workflow,
     )
 
@@ -450,17 +453,38 @@ async def gather_chat_evidence(
     """Run the configured bounded workflow without widening the session scope."""
     runner = search_runner or search_corpus
     primary_query = rewrite.retrieval_query()
-    primary = await runner(
-        session,
-        SearchRequest(query=primary_query, scope=scope, top_k=top_k),
-        embedding_provider,
-        original_query=original_query,
-        settings=settings,
+    query_outcome = await build_retrieval_queries(
+        llm_provider,
+        primary_query,
+        mode=settings.chat_cross_language_retrieval,
+        reasoning_effort=_planner_reasoning_effort(settings),
     )
+    if not query_outcome.queries.translation_attempted:
+        primary = await runner(
+            session,
+            SearchRequest(query=primary_query, scope=scope, top_k=top_k),
+            embedding_provider,
+            original_query=original_query,
+            settings=settings,
+        )
+    else:
+        primary = await runner(
+            session,
+            SearchRequest(query=primary_query, scope=scope, top_k=top_k),
+            embedding_provider,
+            original_query=original_query,
+            settings=settings,
+            retrieval_queries=query_outcome.queries,
+            translation_latency_ms=query_outcome.translation_ms,
+        )
     workflow = settings.chat_retrieval_workflow
     primary = primary.model_copy(
-        update={"retrieval_queries": [primary_query], "retrieval_workflow": workflow}
+        update={
+            "retrieval_queries": query_outcome.queries.executed(),
+            "retrieval_workflow": workflow,
+        }
     )
+    primary = _with_degraded(primary, query_outcome.degraded_reasons)
     if workflow == "single_pass":
         return primary
     if workflow == "routed_multi_search":

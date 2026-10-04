@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -50,26 +51,55 @@ def rrf_fuse(
     Returns [(faiss_id, rrf_score, best_source), ...] sorted by RRF desc,
     then best source rank asc, then faiss_id asc.
     """
+    return rrf_fuse_many(
+        [("dense", dense_results), ("bm25", bm25_results)],
+        k=k,
+        top_k=top_k,
+    )
+
+
+def rrf_fuse_many(
+    ranked_lists: Sequence[tuple[str, Sequence[tuple[int, float]]]],
+    *,
+    k: int = 60,
+    top_k: int = 30,
+) -> list[tuple[int, float, str]]:
+    """Fuse any number of named ranked lists using deterministic equal-weight RRF.
+
+    A repeated id contributes at most once per list and once for every distinct
+    retrieval view. Ties use best rank and then FAISS id, preserving legacy RRF.
+    """
+    if k < 0:
+        raise ValueError("RRF k must be non-negative")
+    if top_k < 0:
+        raise ValueError("RRF top_k must be non-negative")
+
     scores: dict[int, float] = {}
     best_rank: dict[int, int] = {}
+    best_source_order: dict[int, int] = {}
     best_source: dict[int, str] = {}
+    for source_order, (source, results) in enumerate(ranked_lists):
+        seen_in_source: set[int] = set()
+        for rank, (faiss_id, _score) in enumerate(results, start=1):
+            if faiss_id in seen_in_source:
+                continue
+            seen_in_source.add(faiss_id)
+            scores[faiss_id] = scores.get(faiss_id, 0.0) + 1.0 / (k + rank)
+            previous = best_rank.get(faiss_id)
+            if previous is None or rank < previous:
+                best_rank[faiss_id] = rank
+                best_source_order[faiss_id] = source_order
+                best_source[faiss_id] = source
+            elif rank == previous and source_order < best_source_order[faiss_id]:
+                best_source_order[faiss_id] = source_order
+                best_source[faiss_id] = source
 
-    for rank, (faiss_id, _score) in enumerate(dense_results, start=1):
-        rrf_score = 1.0 / (k + rank)
-        scores[faiss_id] = scores.get(faiss_id, 0.0) + rrf_score
-        best_rank[faiss_id] = rank
-        best_source[faiss_id] = "dense"
-
-    for rank, (faiss_id, _score) in enumerate(bm25_results, start=1):
-        rrf_score = 1.0 / (k + rank)
-        scores[faiss_id] = scores.get(faiss_id, 0.0) + rrf_score
-        if faiss_id not in best_rank or rank < best_rank[faiss_id]:
-            best_rank[faiss_id] = rank
-            best_source[faiss_id] = "bm25"
-
-    # Sort: RRF desc, best source rank asc, faiss_id asc.
     result = sorted(
         scores.items(),
-        key=lambda x: (-x[1], best_rank[x[0]], x[0]),
+        key=lambda item: (
+            -item[1],
+            best_rank[item[0]],
+            item[0],
+        ),
     )
     return [(faiss_id, score, best_source[faiss_id]) for faiss_id, score in result[:top_k]]

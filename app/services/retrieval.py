@@ -20,9 +20,10 @@ from app.models.index_snapshot import IndexSnapshot, SystemState
 from app.rerank import RerankError, get_reranker
 from app.retrieval.bm25 import BM25Index
 from app.retrieval.evidence import EvidenceCandidate, rank_candidates, select_evidence
-from app.retrieval.fusion import rrf_fuse
+from app.retrieval.fusion import rrf_fuse, rrf_fuse_many
 from app.retrieval.table import TableContextChunk, expand_table_context
 from app.schemas.search import SearchRequest, SearchResponse, SearchResultOut
+from app.services.retrieval_queries import RetrievalQueries
 
 
 async def search_corpus(
@@ -32,11 +33,16 @@ async def search_corpus(
     *,
     original_query: str | None = None,
     settings: Settings | None = None,
+    retrieval_queries: RetrievalQueries | None = None,
+    translation_latency_ms: float = 0.0,
 ) -> SearchResponse:
     settings = settings or get_settings()
     started = perf_counter()
     timings: dict[str, float] = {}
     original_query = original_query or request.query
+    query_plan = retrieval_queries or RetrievalQueries(original=request.query)
+    if query_plan.original != request.query:
+        raise ValueError("RetrievalQueries.original must match SearchRequest.query")
     state = await session.get(SystemState, 1)
     snapshot = (
         await session.get(IndexSnapshot, state.active_index_snapshot_id)
@@ -74,54 +80,100 @@ async def search_corpus(
             rewritten_query=request.query,
             results=[],
             degraded_reasons=["EMPTY_SCOPE"],
-            retrieval_queries=[request.query],
+            retrieval_queries=query_plan.executed(),
         )
     balance_document_ids = _balanced_document_ids(request, document_ids, settings)
 
     timings["scope"] = (perf_counter() - started) * 1000
     stage_started = perf_counter()
-    query_vector = embedding_provider.embed_query(request.query).vectors[0]
-    timings["embedding"] = (perf_counter() - stage_started) * 1000
-    stage_started = perf_counter()
     faiss = FaissIndex.load(
         Path(snapshot.faiss_path), expected_dimension=embedding_provider.manifest.dimension
     )
-    scores, ids = faiss.search(query_vector, top_k=faiss.ntotal)
-    dense_all = [
-        (int(fid), float(score))
-        for score, fid in zip(scores, ids, strict=True)
-        if int(fid) in allowed
-    ]
-    dense = _ensure_document_candidates(
-        dense_all,
-        settings.retrieval_dense_top_k,
-        balance_document_ids,
-        by_faiss,
-    )
-    timings["dense"] = (perf_counter() - stage_started) * 1000
+    faiss_load_ms = (perf_counter() - stage_started) * 1000
     stage_started = perf_counter()
-
     bm25 = BM25Index.from_dict(json.loads(Path(snapshot.bm25_path).read_text(encoding="utf-8")))
-    sparse_query = (
-        request.query if original_query == request.query else f"{original_query}\n{request.query}"
-    )
-    sparse_all = bm25.search(
-        sparse_query,
-        top_k=len(allowed) if balance_document_ids else settings.retrieval_bm25_top_k,
-        scope_doc_ids=allowed,
-        minimum_should_match=request.minimum_should_match,
-    )
-    sparse = _ensure_document_candidates(
-        sparse_all,
-        settings.retrieval_bm25_top_k,
-        balance_document_ids,
-        by_faiss,
-    )
-    timings["bm25"] = (perf_counter() - stage_started) * 1000
+    bm25_load_ms = (perf_counter() - stage_started) * 1000
+    dense_lists: dict[str, list[tuple[int, float]]] = {}
+    sparse_lists: dict[str, list[tuple[int, float]]] = {}
+    named_queries = [("original", query_plan.original)]
+    if query_plan.english is not None:
+        named_queries.append(("english", query_plan.english))
+
+    for name, query in named_queries:
+        stage_started = perf_counter()
+        query_vector = embedding_provider.embed_query(query).vectors[0]
+        timings[f"embedding_{name}"] = (perf_counter() - stage_started) * 1000
+        stage_started = perf_counter()
+        scores, ids = faiss.search(query_vector, top_k=faiss.ntotal)
+        dense_all = [
+            (int(fid), float(score))
+            for score, fid in zip(scores, ids, strict=True)
+            if int(fid) in allowed
+        ]
+        dense_lists[name] = _ensure_document_candidates(
+            dense_all,
+            settings.retrieval_dense_top_k,
+            balance_document_ids,
+            by_faiss,
+        )
+        timings[f"dense_{name}"] = (perf_counter() - stage_started) * 1000
+        if name == "original":
+            timings[f"dense_{name}"] += faiss_load_ms
+
+        stage_started = perf_counter()
+        sparse_query = query
+        if query_plan.english is None and original_query != request.query:
+            sparse_query = f"{original_query}\n{request.query}"
+        sparse_all = bm25.search(
+            sparse_query,
+            top_k=len(allowed) if balance_document_ids else settings.retrieval_bm25_top_k,
+            scope_doc_ids=allowed,
+            minimum_should_match=request.minimum_should_match,
+        )
+        sparse_lists[name] = _ensure_document_candidates(
+            sparse_all,
+            settings.retrieval_bm25_top_k,
+            balance_document_ids,
+            by_faiss,
+        )
+        timings[f"bm25_{name}"] = (perf_counter() - stage_started) * 1000
+        if name == "original":
+            timings[f"bm25_{name}"] += bm25_load_ms
+
+    dense = dense_lists["original"]
+    sparse = sparse_lists["original"]
+    if query_plan.english is None:
+        timings["embedding"] = timings["embedding_original"]
+        timings["dense"] = timings["dense_original"]
+        timings["bm25"] = timings["bm25_original"]
     fusion_top_k = settings.retrieval_rrf_top_k
     if balance_document_ids:
-        fusion_top_k = max(fusion_top_k, len({row[0] for row in dense + sparse}))
-    fused = rrf_fuse(dense, sparse, top_k=fusion_top_k)
+        fusion_top_k = max(
+            fusion_top_k,
+            len(
+                {
+                    row[0]
+                    for results in (*dense_lists.values(), *sparse_lists.values())
+                    for row in results
+                }
+            ),
+        )
+    stage_started = perf_counter()
+    if query_plan.english is None:
+        fused = rrf_fuse(dense, sparse, top_k=fusion_top_k)
+    else:
+        fused = rrf_fuse_many(
+            [
+                ("dense_original", dense_lists["original"]),
+                ("dense_english", dense_lists["english"]),
+                ("bm25_original", sparse_lists["original"]),
+                ("bm25_english", sparse_lists["english"]),
+            ],
+            top_k=fusion_top_k,
+        )
+    timings["fusion"] = (perf_counter() - stage_started) * 1000
+    if query_plan.translation_attempted:
+        timings["translation"] = translation_latency_ms
     degraded_reasons: list[str] = []
     ranked = fused
     stage_started = perf_counter()
@@ -198,6 +250,10 @@ async def search_corpus(
         debug = {
             "dense": dense,
             "bm25": sparse,
+            "dense_original": dense_lists["original"],
+            "dense_english": dense_lists.get("english", []),
+            "bm25_original": sparse_lists["original"],
+            "bm25_english": sparse_lists.get("english", []),
             "rrf": fused,
             "table_expansions": expansions,
             "snapshot_id": str(snapshot.id),
@@ -207,7 +263,14 @@ async def search_corpus(
                 "rrf_top_k": settings.retrieval_rrf_top_k,
                 "selection": settings.retrieval_selection,
                 "document_balance": settings.retrieval_document_balance,
+                "cross_language_retrieval": query_plan.mode,
+                "cross_language_translation_attempted": query_plan.translation_attempted,
             },
+            "retrieval_queries": {
+                "original": query_plan.original,
+                "english": query_plan.english,
+            },
+            "reranker_query": request.query,
             "rerank": ranked,
             "selected": selection.selected,
             "selection_decisions": [
@@ -224,6 +287,8 @@ async def search_corpus(
                     {
                         *(row[0] for row in dense),
                         *(row[0] for row in sparse),
+                        *(row[0] for row in dense_lists.get("english", [])),
+                        *(row[0] for row in sparse_lists.get("english", [])),
                         *(row[0] for row in fused),
                         *(row[0] for row in ranked),
                         *(row[0] for row in selection.selected),
@@ -237,7 +302,7 @@ async def search_corpus(
         rewritten_query=request.query,
         results=results,
         degraded_reasons=degraded_reasons,
-        retrieval_queries=[request.query],
+        retrieval_queries=query_plan.executed(),
         debug=debug,
     )
 

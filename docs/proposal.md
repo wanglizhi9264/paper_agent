@@ -414,3 +414,17 @@ Gold、答案或 Retriever 结果，不改变 ingestion/index/benchmark，也不
 最终 workflow 采用自适应组合：单文档直接 bounded refinement；多文档先 route；route 低置信度
 回退 bounded refinement。置信度 0.30 相比 0.65 没有增加 Recall 且成本更高，因此保留 0.65。
 两次相同配置 dev 重复表明 routed Recall 有方差，默认仍不切换，test 继续保持未触碰。
+
+## 23. 2026-10-04 CJK→English dual-query 检索实验
+
+针对 standard v2 dev 中 CJK 问题与英文论文术语错配的候选池漏召回，新建独立分支实现一个
+chat-only、默认关闭、可审计的 dual-query 纵向切片。它不复用多轮 rewrite 来替换用户查询，
+而是保留 original standalone query，并只为含 CJK 的 query 请求一个受约束 English retrieval
+view；失败 fail closed 到原双路检索，搜索 API 和非 CJK 请求不增加 LLM 依赖。
+
+实现顺序固定为：先增加 query contract、默认关闭配置、严格 prompt 与失败降级测试；再把
+Dense/BM25 泛化为四个同 scope list 并用通用 deterministic RRF 融合，reranker 仍读取 original
+query；最后增加 dev-only 深度诊断 CLI，在同 snapshot/model/scope/depth 下比较 off/dual，报告
+Top-100 per-Gold ranks、candidate miss 和既有 13 个 hard-miss slice。冻结 test 不参与此次方案
+选择，Gold、parser/chunker、index 和 BM25 analyzer 均不修改。只有预注册 decision rule 通过时
+结论才是 `KEEP OPT-IN`；否则为 `REJECT`，默认值在本切片中始终保持 `off`。

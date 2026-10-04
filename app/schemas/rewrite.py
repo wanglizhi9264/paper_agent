@@ -33,6 +33,20 @@ class StructuredRewrite(CamelModel):
         return " ".join(unique)
 
 
+class EnglishRetrievalQuery(CamelModel):
+    """Validated English-only retrieval transformation output."""
+
+    english_query: str = Field(min_length=1, max_length=4000)
+
+    @model_validator(mode="after")
+    def normalize_query(self) -> Self:
+        normalized = " ".join(self.english_query.split())
+        if not normalized:
+            raise ValueError("english_query must not be blank")
+        self.english_query = normalized
+        return self
+
+
 class EvidenceRefinementPlan(CamelModel):
     """One bounded decision after the primary retrieval pass."""
 

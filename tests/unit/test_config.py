@@ -23,6 +23,7 @@ def test_defaults_loaded_from_test_env() -> None:
     assert settings.chat_routing_max_tokens == 600
     assert settings.chat_planner_reasoning_effort == "none"
     assert settings.chat_rewrite_language == "preserve"
+    assert settings.chat_cross_language_retrieval == "off"
     assert (
         settings.retrieval_dense_top_k
         == settings.retrieval_bm25_top_k
@@ -47,6 +48,7 @@ def test_defaults_loaded_from_test_env() -> None:
         {"chat_routing_max_tokens": 64},
         {"chat_planner_reasoning_effort": "ultra"},
         {"chat_rewrite_language": "translate_everything"},
+        {"chat_cross_language_retrieval": "always_translate"},
         {"rerank_batch_size": 0},
         {"rerank_max_tokens": 0},
     ],

@@ -92,6 +92,22 @@ Respond in JSON format:
 {{"confidence":0.0,"routes":[{{"document_id":"allowed-uuid","subquery":"..."}}]}}
 """
 
+CROSS_LANGUAGE_RETRIEVAL_PROMPT = """Transform the standalone query into one English scientific-paper retrieval query.
+
+Rules:
+- This is retrieval query transformation. Do NOT answer the question.
+- Preserve every paper, model, dataset, method, metric, acronym, formula, number, symbol,
+  and variable name from the input.
+- Use standard English scientific terminology without adding facts not present in the input.
+- Return strict JSON only and include the required key.
+
+Standalone query:
+{query}
+
+Respond in JSON format:
+{{"english_query":"..."}}
+"""
+
 
 def build_system_prompt(sources: str) -> str:
     return SYSTEM_PROMPT.format(sources=sources)
@@ -139,6 +155,10 @@ def build_document_routing_prompt(rewrite: str, catalog: str, max_routes: int) -
         catalog=catalog,
         max_routes=max_routes,
     )
+
+
+def build_cross_language_retrieval_prompt(query: str) -> str:
+    return CROSS_LANGUAGE_RETRIEVAL_PROMPT.format(query=query)
 
 
 def build_messages(

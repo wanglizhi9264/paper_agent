@@ -10,9 +10,11 @@ from app.embedding.fake import FakeEmbeddingAdapter
 from app.models.chunk import Chunk
 from app.models.collection import Collection, CollectionDocument
 from app.rerank.base import RerankError
+from app.retrieval.bm25 import BM25Index
 from app.schemas.search import SearchRequest, SearchScope
 from app.services.ingestion import run_ingest
 from app.services.retrieval import as_evidence_candidate, search_corpus
+from app.services.retrieval_queries import RetrievalQueries
 from tests.unit.test_ingestion_embedding import _FakeParser, _make_doc_and_job, _RealChunker
 
 
@@ -102,6 +104,96 @@ async def test_explicit_document_balance_keeps_each_scoped_document(async_sqlite
         settings=get_settings().model_copy(update={"retrieval_document_balance": "explicit_scope"}),
     )
     assert {result.document_id for result in response.results} == {doc.id for doc in docs}
+
+
+async def test_dual_query_runs_four_scoped_lists_and_audits_queries(
+    async_sqlite_session, tmp_path, monkeypatch
+):
+    docs, base_adapter = await corpus(async_sqlite_session, tmp_path)
+
+    class RecordingEmbedding(FakeEmbeddingAdapter):
+        def __init__(self) -> None:
+            super().__init__(dimension=base_adapter.manifest.dimension)
+            self.queries: list[str] = []
+
+        def embed_query(self, query: str):
+            self.queries.append(query)
+            return super().embed_query(query)
+
+    adapter = RecordingEmbedding()
+    sparse_calls: list[tuple[str, set[int]]] = []
+    original_search = BM25Index.search
+
+    def recording_search(self, query, *args, **kwargs):
+        sparse_calls.append((query, set(kwargs["scope_doc_ids"])))
+        return original_search(self, query, *args, **kwargs)
+
+    monkeypatch.setattr(BM25Index, "search", recording_search)
+    original = "比较 testing retrieval 的结果"
+    english = "Compare testing retrieval results"
+    scope = SearchScope(type="documents", document_ids=[docs[0].id])
+
+    response = await search_corpus(
+        async_sqlite_session,
+        SearchRequest(query=original, scope=scope, top_k=10, debug=True),
+        adapter,
+        original_query="用户原始中文问题",
+        retrieval_queries=RetrievalQueries(
+            original=original,
+            english=english,
+            mode="cjk_to_english_dual",
+            translation_attempted=True,
+        ),
+        translation_latency_ms=12.5,
+        settings=get_settings().model_copy(
+            update={
+                "retrieval_dense_top_k": 100,
+                "retrieval_bm25_top_k": 100,
+                "retrieval_rrf_top_k": 80,
+            }
+        ),
+    )
+
+    assert adapter.queries == [original, english]
+    assert [call[0] for call in sparse_calls] == [original, english]
+    assert sparse_calls[0][1] == sparse_calls[1][1]
+    assert {result.document_id for result in response.results} == {docs[0].id}
+    assert response.retrieval_queries == [original, english]
+    debug = response.debug
+    assert debug is not None
+    assert debug["retrieval_queries"] == {"original": original, "english": english}
+    assert debug["reranker_query"] == original
+    assert debug["policy"]["cross_language_retrieval"] == "cjk_to_english_dual"
+    assert debug["timings_ms"]["translation"] == 12.5
+    for stage in ("dense_original", "dense_english", "bm25_original", "bm25_english"):
+        assert stage in debug
+
+
+async def test_explicit_original_only_plan_preserves_default_ranking(
+    async_sqlite_session, tmp_path
+):
+    docs, adapter = await corpus(async_sqlite_session, tmp_path)
+    request = SearchRequest(
+        query="testing retrieval",
+        scope=SearchScope(type="documents", document_ids=[docs[0].id]),
+        top_k=10,
+        debug=True,
+    )
+
+    default = await search_corpus(async_sqlite_session, request, adapter)
+    explicit = await search_corpus(
+        async_sqlite_session,
+        request,
+        adapter,
+        retrieval_queries=RetrievalQueries(original=request.query),
+    )
+
+    assert [result.chunk_id for result in default.results] == [
+        result.chunk_id for result in explicit.results
+    ]
+    assert default.debug["dense"] == explicit.debug["dense"]
+    assert default.debug["bm25"] == explicit.debug["bm25"]
+    assert default.debug["rrf"] == explicit.debug["rrf"]
 
 
 @pytest.mark.parametrize("failure", ["unavailable", "invalid_scores", "programming_bug"])

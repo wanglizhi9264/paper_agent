@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.retrieval.fusion import rrf_fuse
+from app.retrieval.fusion import rrf_fuse, rrf_fuse_many
 
 
 def test_rrf_basic() -> None:
@@ -79,3 +79,54 @@ def test_rrf_best_source() -> None:
     sources = {r[0]: r[2] for r in results}
     assert sources[1] == "dense"
     assert sources[2] == "bm25"
+
+
+def test_rrf_many_accumulates_four_independent_lists() -> None:
+    results = rrf_fuse_many(
+        [
+            ("dense_original", [(1, 0.9), (2, 0.8)]),
+            ("dense_english", [(2, 0.9), (1, 0.8)]),
+            ("bm25_original", [(3, 5.0), (1, 4.0)]),
+            ("bm25_english", [(1, 5.0), (3, 4.0)]),
+        ],
+        k=60,
+        top_k=10,
+    )
+
+    assert results[0][0] == 1
+    expected = 2 / 61 + 2 / 62
+    assert abs(results[0][1] - expected) < 1e-10
+
+
+def test_rrf_many_duplicate_id_contributes_once_per_list() -> None:
+    results = rrf_fuse_many(
+        [("dense_original", [(1, 0.9), (1, 0.8)]), ("bm25_original", [(1, 5.0)])],
+        k=60,
+        top_k=10,
+    )
+
+    assert results == [(1, 2 / 61, "dense_original")]
+
+
+def test_rrf_many_is_deterministic_when_scores_and_ranks_tie() -> None:
+    ranked_lists = [
+        ("dense_original", [(5, 1.0), (3, 0.9)]),
+        ("dense_english", [(3, 1.0), (5, 0.9)]),
+    ]
+
+    first = rrf_fuse_many(ranked_lists, top_k=10)
+    second = rrf_fuse_many(ranked_lists, top_k=10)
+
+    assert first == second
+    assert [row[0] for row in first] == [3, 5]
+
+
+def test_legacy_rrf_delegates_without_changing_results() -> None:
+    dense = [(7, 0.9), (2, 0.8)]
+    bm25 = [(2, 5.0), (9, 4.0)]
+
+    assert rrf_fuse(dense, bm25, k=60, top_k=10) == rrf_fuse_many(
+        [("dense", dense), ("bm25", bm25)],
+        k=60,
+        top_k=10,
+    )

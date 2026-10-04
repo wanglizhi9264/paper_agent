@@ -66,6 +66,7 @@ class Settings(BaseSettings):
         "none"
     )
     chat_rewrite_language: Literal["preserve", "english_for_cjk"] = "preserve"
+    chat_cross_language_retrieval: Literal["off", "cjk_to_english_dual"] = "off"
 
     # --- Generator (OpenAI-compatible) ---
     llm_base_url: str = "http://127.0.0.1:11434/v1"
