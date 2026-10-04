@@ -6,6 +6,7 @@ from typing import Literal, Self
 from pydantic import Field, model_validator
 
 from app.schemas.common import CamelModel
+from app.schemas.search import RetrievalRouteOut
 
 
 class ChatRequest(CamelModel):
@@ -69,4 +70,5 @@ class ChatResponse(CamelModel):
     rewritten_query: str
     degraded_reasons: list[str]
     retrieval_queries: list[str]
-    retrieval_workflow: Literal["single_pass", "bounded_refinement"]
+    retrieval_routes: list[RetrievalRouteOut]
+    retrieval_workflow: Literal["single_pass", "bounded_refinement", "routed_multi_search"]

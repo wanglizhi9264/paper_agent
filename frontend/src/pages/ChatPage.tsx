@@ -117,7 +117,10 @@ export function ChatPage() {
                 <h3>
                   Sources
                   {sseState.retrievalQueries.length > 1 && (
-                    <span className="muted"> · {sseState.retrievalQueries.length} bounded searches</span>
+                    <span className="muted">
+                      {" "}· {sseState.retrievalQueries.length} bounded searches
+                      {sseState.retrievalWorkflow === "routed_multi_search" ? " · paper-routed" : ""}
+                    </span>
                   )}
                 </h3>
                 {sseState.sources.map((src) => (

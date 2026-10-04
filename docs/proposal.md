@@ -396,3 +396,15 @@ quote hash、最终 resolution 以及跨 split 的 anchor/page/Chunk 重叠，�
 Markdown 和全题人工审阅 Markdown。私有 v2 数据、原论文和具体 evidence 继续仅保存在本机；
 Git 只提交审计工具、测试和方法文档。v2 test 在冻结前不运行 retrieval，冻结后的首次正式
 evaluation 才作为新 baseline，v1 历史指标不得直接与 v2 混称为检索提升。
+
+## 22. 2026-10-04 文档证据路由实验
+
+在 standard v2 首次 baseline 已冻结后，新增一个 chat-only、默认关闭的
+`routed_multi_search` 纵向切片，优先针对跨论文和多轮问题。先执行原 scope primary search，
+再由结构化 LLM planner 仅根据当前 scope 的文档 ID/标题生成至多 3 条 paper-specific
+子查询；每条子查询在单文档子 scope 内独立走现有检索链路，最终用 rank-only RRF 合并。
+
+实施顺序为：先增加 route schema/config/OpenAPI 契约和 fail-closed 单测；再接入 chat/SSE
+审计轨迹与前端状态；最后只在 frozen answerable dev 比较 single/refinement/routed。路由器不读取
+Gold、答案或 Retriever 结果，不改变 ingestion/index/benchmark，也不扩大 Session scope。
+真实 A/B 未证明净收益前，`.env` 和代码默认值保持 `single_pass`。

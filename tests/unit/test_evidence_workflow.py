@@ -11,15 +11,25 @@ from app.api.errors import DependencyUnavailableError
 from app.core.config import Settings, get_settings
 from app.embedding.fake import FakeEmbeddingAdapter
 from app.llm.base import LLMMessage, LLMResponse
-from app.schemas.rewrite import EvidenceRefinementPlan, StructuredRewrite
+from app.schemas.rewrite import DocumentRoutingPlan, EvidenceRefinementPlan, StructuredRewrite
 from app.schemas.search import SearchResponse, SearchResultOut, SearchScope
-from app.services.evidence_workflow import gather_chat_evidence, merge_search_responses
+from app.services.evidence_workflow import (
+    RoutingDocument,
+    gather_chat_evidence,
+    merge_search_responses,
+)
 
 
-def _result(number: int, raw_content: str, *, rank: int) -> SearchResultOut:
+def _result(
+    number: int,
+    raw_content: str,
+    *,
+    rank: int,
+    document_id: uuid.UUID | None = None,
+) -> SearchResultOut:
     return SearchResultOut(
         chunk_id=uuid.UUID(int=number),
-        document_id=uuid.UUID(int=100 + number),
+        document_id=document_id or uuid.UUID(int=100 + number),
         document_title=f"Paper {number}",
         section_path=["Results"],
         page_start=number,
@@ -103,6 +113,25 @@ def _rewrite() -> StructuredRewrite:
 def test_refinement_plan_requires_one_consistent_decision(payload: dict[str, object]) -> None:
     with pytest.raises(ValidationError):
         EvidenceRefinementPlan.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"confidence": 1.1, "routes": [{"document_id": str(uuid.UUID(int=1)), "subquery": "x"}]},
+        {
+            "confidence": 0.9,
+            "routes": [
+                {"document_id": str(uuid.UUID(int=1)), "subquery": "x"},
+                {"document_id": str(uuid.UUID(int=1)), "subquery": "y"},
+            ],
+        },
+        {"confidence": 0.9, "routes": [{"document_id": str(uuid.UUID(int=1)), "subquery": "  "}]},
+    ],
+)
+def test_document_routing_plan_is_bounded_and_unambiguous(payload: dict[str, object]) -> None:
+    with pytest.raises(ValidationError):
+        DocumentRoutingPlan.model_validate(payload)
 
 
 @pytest.mark.asyncio
@@ -271,6 +300,137 @@ async def test_unexpected_planner_bug_is_not_hidden_as_degradation() -> None:
             original_query="original",
             search_runner=search,
         )
+
+
+@pytest.mark.asyncio
+async def test_routed_search_uses_only_allowed_single_document_scopes() -> None:
+    document_a = uuid.UUID(int=801)
+    document_b = uuid.UUID(int=802)
+    primary = _response(
+        "primary",
+        [
+            _result(1, "a primary", rank=1, document_id=document_a),
+            _result(2, "a second", rank=2, document_id=document_a),
+        ],
+    )
+    routed_a = _response("method A FID", [_result(3, "a routed", rank=1, document_id=document_a)])
+    routed_b = _response("method B FID", [_result(4, "b routed", rank=1, document_id=document_b)])
+    search = RecordingSearch([primary, routed_a, routed_b])
+    planner = PlanProvider(
+        __import__("json").dumps(
+            {
+                "confidence": 0.92,
+                "routes": [
+                    {"document_id": str(document_a), "subquery": "method A FID"},
+                    {"document_id": str(document_b), "subquery": "method B FID"},
+                ],
+            }
+        )
+    )
+    original_scope = SearchScope(type="documents", document_ids=[document_a, document_b])
+
+    response = await gather_chat_evidence(
+        cast(AsyncSession, object()),
+        _rewrite(),
+        original_scope,
+        FakeEmbeddingAdapter(),
+        planner,  # type: ignore[arg-type]
+        _settings("routed_multi_search"),
+        original_query="original",
+        top_k=3,
+        search_runner=search,
+        routing_documents=[
+            RoutingDocument(document_id=document_a, title="Paper A"),
+            RoutingDocument(document_id=document_b, title="Paper B"),
+        ],
+    )
+
+    assert [call[1] for call in search.calls] == [
+        original_scope,
+        SearchScope(type="documents", document_ids=[document_a]),
+        SearchScope(type="documents", document_ids=[document_b]),
+    ]
+    assert response.retrieval_workflow == "routed_multi_search"
+    assert response.retrieval_queries == [
+        _rewrite().retrieval_query(),
+        "method A FID",
+        "method B FID",
+    ]
+    assert [route.document_ids for route in response.retrieval_routes] == [
+        [document_a],
+        [document_b],
+    ]
+    assert {item.document_id for item in response.results} == {document_a, document_b}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("plan", "reason"),
+    [
+        (
+            {
+                "confidence": 0.2,
+                "routes": [{"document_id": str(uuid.UUID(int=801)), "subquery": "x"}],
+            },
+            "DOCUMENT_ROUTE_LOW_CONFIDENCE",
+        ),
+        (
+            {
+                "confidence": 0.9,
+                "routes": [{"document_id": str(uuid.UUID(int=999)), "subquery": "x"}],
+            },
+            "DOCUMENT_ROUTE_SCOPE_REJECTED",
+        ),
+    ],
+)
+async def test_route_plan_fails_closed_to_primary(plan: dict[str, object], reason: str) -> None:
+    document_a = uuid.UUID(int=801)
+    document_b = uuid.UUID(int=802)
+    primary = _response("primary", [_result(1, "primary", rank=1, document_id=document_a)])
+    search = RecordingSearch([primary])
+
+    response = await gather_chat_evidence(
+        cast(AsyncSession, object()),
+        _rewrite(),
+        SearchScope(type="documents", document_ids=[document_a, document_b]),
+        FakeEmbeddingAdapter(),
+        PlanProvider(__import__("json").dumps(plan)),  # type: ignore[arg-type]
+        _settings("routed_multi_search"),
+        original_query="original",
+        search_runner=search,
+        routing_documents=[
+            RoutingDocument(document_id=document_a, title="Paper A"),
+            RoutingDocument(document_id=document_b, title="Paper B"),
+        ],
+    )
+
+    assert len(search.calls) == 1
+    assert response.degraded_reasons == [reason]
+    assert response.retrieval_routes == []
+    assert [item.chunk_id for item in response.results] == [uuid.UUID(int=1)]
+
+
+def test_merge_can_preserve_one_candidate_per_routed_document() -> None:
+    document_a = uuid.UUID(int=901)
+    document_b = uuid.UUID(int=902)
+    primary = _response(
+        "q1",
+        [
+            _result(1, "a1", rank=1, document_id=document_a),
+            _result(2, "a2", rank=2, document_id=document_a),
+        ],
+    )
+    routed = _response("q2", [_result(3, "b1", rank=1, document_id=document_b)])
+
+    merged = merge_search_responses(
+        [primary, routed],
+        top_k=2,
+        selection_strategy="legacy",
+        preserve_document_ids=frozenset({document_a, document_b}),
+    )
+
+    assert {item.document_id for item in merged} == {document_a, document_b}
+    assert [item.rank for item in merged] == [1, 2]
 
 
 def test_merge_deduplicates_hash_after_rrf_ordering() -> None:

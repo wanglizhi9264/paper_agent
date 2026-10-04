@@ -154,6 +154,7 @@ async def chat(
         rewritten_query=search.rewritten_query,
         degraded_reasons=search.degraded_reasons,
         retrieval_queries=search.retrieval_queries,
+        retrieval_routes=search.retrieval_routes,
         retrieval_workflow=search.retrieval_workflow,
     )
 
@@ -175,6 +176,9 @@ async def chat_stream(
                 "message_id": str(message_id),
                 "rewritten_query": search.rewritten_query,
                 "retrieval_queries": search.retrieval_queries,
+                "retrieval_routes": [
+                    route.model_dump(mode="json") for route in search.retrieval_routes
+                ],
                 "retrieval_workflow": search.retrieval_workflow,
             },
         )

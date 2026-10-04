@@ -68,7 +68,8 @@ export interface SearchResponse {
   results: SearchResultItem[];
   degraded_reasons: string[];
   retrieval_queries: string[];
-  retrieval_workflow: "single_pass" | "bounded_refinement";
+  retrieval_routes: Array<{ query: string; document_ids: string[] }>;
+  retrieval_workflow: "single_pass" | "bounded_refinement" | "routed_multi_search";
 }
 
 export interface SearchResultItem {

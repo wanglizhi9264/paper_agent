@@ -528,6 +528,34 @@ Content:
 - 此工作流不新增持久化 checkpoint，不替代 PostgreSQL/ARQ，也不得被描述为 durable
   Agent。后续若需要可恢复长任务，必须另行设计状态机、取消、重试和迁移。
 
+### 14.8 文档证据路由（2026-10-04）
+
+为处理跨论文比较和多轮问题，可在聊天链路实验性启用
+`routed_multi_search`。它是受当前 Session scope 约束的检索工具，不是 Codex skill、
+开放 Agent 或文档分类 Gold；现有 `single_pass` / `bounded_refinement` 均保留，默认仍为
+`single_pass`，只有固定 dev split A/B 通过后才可考虑切换。
+
+- 路由器只接收结构化 rewrite 和当前 scope 内已 ready 文档的 `document_id/title` 目录，
+  不读取答案、Gold、Retriever 候选或论文全文。每条 route 必须复制目录中的 UUID，服务端
+  再做 allowlist 校验；越界 ID、无效 JSON、重复文档、低置信度均 fail closed 到首轮检索。
+- `chat_routing_max_documents` 默认 3、范围 1..6；`chat_routing_min_confidence` 默认
+  0.65、范围 0..1；`chat_routing_max_tokens` 默认 600、范围 128..1024。路由数量和 token
+  预算均是硬上限，不递归、不联网、不下载论文。
+- 每条 route 生成一个 paper-specific、self-contained 子查询，并以仅含该文档的
+  `documents` scope 独立执行 Dense/BM25/RRF/rerank。子 scope 必须是原 scope 的真子集；
+  路由器不得把 collection/all 扩大到目录以外，也不得改变 Session 持久化 scope。
+- 系统始终保留一次原始 scope 的 primary search。成功的 routed searches 与 primary 只按
+  1-based rank 做 RRF（`k=60`），沿用 Chunk/hash/cell coverage 去重。若 routed 文档数不超过
+  `top_k`，最终列表为每个成功 route 保留至少一个真实候选，再按融合顺序回填；不伪造 Chunk。
+- planner 或单条 routed search 失败不丢弃 primary。稳定降级码为
+  `DOCUMENT_ROUTE_PLAN_FAILED`、`DOCUMENT_ROUTE_SCOPE_REJECTED`、
+  `DOCUMENT_ROUTE_LOW_CONFIDENCE`、`DOCUMENT_ROUTE_SEARCH_FAILED`。
+- HTTP chat 与 SSE meta 返回 `retrieval_routes`（query + 单文档 UUID）以及既有
+  `retrieval_queries/retrieval_workflow`，便于审计；不返回模型 rationale。Citation 仍只能绑定
+  最终 context pack 中的真实唯一 Chunk ID。
+- 真实评测只在 answerable dev 上同时比较三种 workflow，严格使用 frozen Chunk-ID qrels；
+  test 不参与选参，任何提升不得解释为修改 benchmark 或 Gold。
+
 ## 15. Generation 与 Citation
 
 `LLMProvider` 必须提供异步 `generate()` 和 `stream()`，业务代码只依赖统一 message、timeout、usage 和 finish reason 模型。

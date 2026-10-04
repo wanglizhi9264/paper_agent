@@ -70,7 +70,8 @@ export interface SSEState {
   citations: ChatCitation[];
   degradedReasons: string[];
   retrievalQueries: string[];
-  retrievalWorkflow: "single_pass" | "bounded_refinement";
+  retrievalRoutes: Array<{ query: string; document_ids: string[] }>;
+  retrievalWorkflow: "single_pass" | "bounded_refinement" | "routed_multi_search";
   error: string | null;
   requestId: string | null;
 }
@@ -83,6 +84,7 @@ export function useChatStream() {
     citations: [],
     degradedReasons: [],
     retrievalQueries: [],
+    retrievalRoutes: [],
     retrievalWorkflow: "single_pass",
     error: null,
     requestId: null,
@@ -97,6 +99,7 @@ export function useChatStream() {
         citations: [],
         degradedReasons: [],
         retrievalQueries: [],
+        retrievalRoutes: [],
         retrievalWorkflow: "single_pass",
         error: null,
         requestId: null,
@@ -110,6 +113,8 @@ export function useChatStream() {
               ...s,
               requestId: (evt.data.request_id as string) ?? null,
               retrievalQueries: (evt.data.retrieval_queries as string[]) ?? [],
+              retrievalRoutes:
+                (evt.data.retrieval_routes as SSEState["retrievalRoutes"]) ?? [],
               retrievalWorkflow:
                 (evt.data.retrieval_workflow as SSEState["retrievalWorkflow"]) ??
                 "single_pass",
@@ -160,6 +165,7 @@ export function useChatStream() {
       citations: [],
       degradedReasons: [],
       retrievalQueries: [],
+      retrievalRoutes: [],
       retrievalWorkflow: "single_pass",
       error: null,
       requestId: null,

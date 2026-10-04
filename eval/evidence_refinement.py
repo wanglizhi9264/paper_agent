@@ -1,4 +1,4 @@
-"""Dev-only single-pass versus bounded-refinement retrieval A/B.
+"""Dev-only single-pass, bounded-refinement, and document-routing retrieval A/B.
 
 The runner uses the production evidence workflow against one frozen snapshot.
 It never evaluates the held-out test split, generates answers, or writes to the DB.
@@ -37,7 +37,7 @@ from app.services.evidence_workflow import gather_chat_evidence
 from eval.evidence_selection import retrieval_query
 from eval.pdf_v2_release import validate_resolved_dataset
 
-WORKFLOWS = ("single_pass", "bounded_refinement")
+WORKFLOWS = ("single_pass", "bounded_refinement", "routed_multi_search")
 
 
 def score_retrieval(gold: set[str], retrieved: list[str]) -> dict[str, float]:
@@ -59,6 +59,7 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, float | int]:
         "mrr": sum(float(row["mrr"]) for row in rows) / len(rows),
         "mean_retrieval_calls": sum(int(row["retrieval_calls"]) for row in rows) / len(rows),
         "refinement_rate": sum(int(row["retrieval_calls"]) == 2 for row in rows) / len(rows),
+        "multi_search_rate": sum(int(row["retrieval_calls"]) > 1 for row in rows) / len(rows),
     }
 
 
@@ -163,7 +164,10 @@ async def evaluate(dataset: Path) -> dict[str, Any]:
             "max_tokens": settings.rerank_max_tokens,
         },
         "planner_model": settings.llm_model,
-        "planner_max_tokens": settings.chat_refinement_max_tokens,
+        "planner_max_tokens": {
+            "refinement": settings.chat_refinement_max_tokens,
+            "routing": settings.chat_routing_max_tokens,
+        },
         "workflows": {
             workflow: {"summary": summarize(values), "questions": values}
             for workflow, values in rows.items()

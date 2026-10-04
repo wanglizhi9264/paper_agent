@@ -200,6 +200,8 @@ def test_search_openapi_remains_compatible(client):
     assert request["top_k"]["default"] == 8
     assert "debug" in schemas["SearchResponse"]["properties"]
     assert "retrieval_queries" in schemas["SearchResponse"]["properties"]
+    assert "retrieval_routes" in schemas["SearchResponse"]["properties"]
     chat = schemas["ChatResponse"]
     assert "retrieval_queries" in chat["required"]
+    assert "retrieval_routes" in chat["required"]
     assert "retrieval_workflow" in chat["required"]

@@ -55,8 +55,13 @@ class Settings(BaseSettings):
     retrieval_rrf_top_k: int = Field(default=30, ge=20, le=200)
     retrieval_selection: Literal["legacy", "cell_coverage"] = "legacy"
     retrieval_document_balance: Literal["off", "explicit_scope"] = "explicit_scope"
-    chat_retrieval_workflow: Literal["single_pass", "bounded_refinement"] = "single_pass"
+    chat_retrieval_workflow: Literal["single_pass", "bounded_refinement", "routed_multi_search"] = (
+        "single_pass"
+    )
     chat_refinement_max_tokens: int = Field(default=600, ge=128, le=1024)
+    chat_routing_max_documents: int = Field(default=3, ge=1, le=6)
+    chat_routing_min_confidence: float = Field(default=0.65, ge=0.0, le=1.0)
+    chat_routing_max_tokens: int = Field(default=600, ge=128, le=1024)
     chat_rewrite_language: Literal["preserve", "english_for_cjk"] = "preserve"
 
     # --- Generator (OpenAI-compatible) ---

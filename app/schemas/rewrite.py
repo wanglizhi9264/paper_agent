@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from typing import Self
 
 from pydantic import Field, model_validator
@@ -49,4 +50,33 @@ class EvidenceRefinementPlan(CamelModel):
             if not normalized:
                 raise ValueError("subquery must not be blank")
             self.subquery = normalized
+        return self
+
+
+class DocumentRoute(CamelModel):
+    """One paper-scoped retrieval query selected from an allowed catalog."""
+
+    document_id: uuid.UUID
+    subquery: str = Field(min_length=1, max_length=4000)
+
+    @model_validator(mode="after")
+    def normalize_subquery(self) -> Self:
+        normalized = " ".join(self.subquery.split())
+        if not normalized:
+            raise ValueError("subquery must not be blank")
+        self.subquery = normalized
+        return self
+
+
+class DocumentRoutingPlan(CamelModel):
+    """Bounded, confidence-gated paper routing proposed by the LLM."""
+
+    confidence: float = Field(ge=0.0, le=1.0)
+    routes: list[DocumentRoute] = Field(min_length=1, max_length=6)
+
+    @model_validator(mode="after")
+    def document_ids_are_unique(self) -> Self:
+        ids = [route.document_id for route in self.routes]
+        if len(ids) != len(set(ids)):
+            raise ValueError("document routes must use unique document_ids")
         return self

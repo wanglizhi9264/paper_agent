@@ -6,7 +6,7 @@ from eval.evidence_refinement import WORKFLOWS, score_retrieval, summarize
 
 
 def test_refinement_eval_has_locked_before_after_variants() -> None:
-    assert WORKFLOWS == ("single_pass", "bounded_refinement")
+    assert WORKFLOWS == ("single_pass", "bounded_refinement", "routed_multi_search")
 
 
 def test_refinement_eval_uses_strict_chunk_id_metrics() -> None:
@@ -32,4 +32,5 @@ def test_refinement_eval_reports_cost_and_refinement_rate() -> None:
         "mrr": 0.75,
         "mean_retrieval_calls": 1.5,
         "refinement_rate": 0.5,
+        "multi_search_rate": 0.5,
     }
