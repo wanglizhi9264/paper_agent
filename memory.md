@@ -409,3 +409,5 @@ chat template 的 tokenizer 与显式 supports_tools 配置。重启保留预算
 - 真实当前问题 smoke 已成功返回有效引用答案（4 工具 / 5 LLM）；这仅是用户问题开发复测，不是新 holdout 质量门。索引/模型/排序默认值未改变，未读取或重跑 frozen test/Gold。
 - 实跑：`uv run --no-sync pytest -q -p no:cacheprovider --basetemp storage/_test/pytest-agent-grounding-final` 827 passed / 9 skipped；之后只改提示文本并跑最终相关测试 34 passed。Ruff check/format 通过，mypy app 120 files 通过。Vue lint/typecheck、20 tests、build 通过（问答 JS 218.66 kB / gzip 84.50 kB）。中间曾发现测试 fixture 页码与 IR 不匹配，已修正并重跑通过。
 - GitHub 开发快照已上传 `codex/paper-agent-runtime`，阅读入口 `docs/code-tour.md`。OAuth 无 workflow scope，仅本地 `.github/workflows/ci.yml` Node 24 调整未上传；未变更用户已有 context-loss/provenance 文件或 tmp。
+
+- 最终真实同题重复：新 worker 首轮 27.48 秒（含本地模型冷启动），保持 worker 不重启后同题 6.97 秒，均成功并引用实际表格/解释段落，3 次工具（1 次检索）/5 次 LLM。各为一次观测，不是 p50/p95 或跨配置性能评测；保持进程和模型缓存可避免每题冷启动。修复已追加推送至同一 GitHub 分支。
