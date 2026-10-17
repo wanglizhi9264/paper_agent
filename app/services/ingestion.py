@@ -360,6 +360,9 @@ async def run_ingest(
     version: DocumentVersion | None = None
     new_snapshot: Any | None = None
     await _pg_advisory_lock(session, _doc_lock_key(document.id))
+    from app.core.gpu import acquire_gpu_slot
+
+    await acquire_gpu_slot(session)
     await _set_job(session, job, status=JobStatus.RUNNING, stage=JobStage.QUEUED, progress=5)
     await _set_doc_status(document, DocumentStatus.PARSING)
     await _set_job(session, job, status=JobStatus.RUNNING, stage=JobStage.PARSING, progress=20)

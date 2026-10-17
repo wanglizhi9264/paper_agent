@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from collections.abc import AsyncIterator
@@ -10,14 +11,17 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import StreamingResponse
 
-from app.api.errors import DependencyUnavailableError, NotFoundError
+from app.agent.context import LocalTokenCounter, build_grounded_context
+from app.agent.contracts import AgentError
+from app.api.errors import ConflictError, DependencyUnavailableError, NotFoundError
 from app.core.config import get_settings
 from app.db.session import get_session
 from app.embedding.registry import get_embedding_provider
-from app.llm.base import LLMError, LLMMessage
+from app.llm.base import LLMError, LLMMessage, ReasoningEffort
 from app.llm.citations import RefusalStreamGate, finalize_answer
 from app.llm.openai_compatible import get_llm_provider
 from app.llm.prompts import build_messages, build_system_prompt
+from app.models.agent import AgentRun
 from app.models.enums import MessageRole, MessageStatus
 from app.models.session import Message, Session
 from app.schemas.chat import BBoxOut, ChatRequest, ChatResponse, CitationOut, SourceOut
@@ -26,6 +30,13 @@ from app.services.evidence_workflow import gather_chat_evidence
 from app.services.query_rewrite import rewrite_query
 
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
+
+
+def _generation_effort() -> ReasoningEffort | None:
+    settings = get_settings()
+    if not settings.agent_runtime_enabled or settings.agent_reasoning_effort == "provider_default":
+        return None
+    return settings.agent_reasoning_effort
 
 
 def _scope(item: Session) -> SearchScope:
@@ -48,13 +59,22 @@ async def _prepare(
     item = await db.get(Session, body.session_id)
     if item is None:
         raise NotFoundError(code="SESSION_NOT_FOUND", message="Session was not found.")
+    active = await db.scalar(
+        select(AgentRun.id).where(
+            AgentRun.session_id == item.id,
+            AgentRun.status.in_(["queued", "running", "interrupted"]),
+        )
+    )
+    if active:
+        raise ConflictError(code="SESSION_RUN_ACTIVE")
+    settings = get_settings()
     recent = list(
         (
             await db.execute(
                 select(Message)
-                .where(Message.session_id == item.id)
+                .where(Message.session_id == item.id, Message.status == MessageStatus.COMPLETE)
                 .order_by(Message.created_at.desc(), Message.id.desc())
-                .limit(4)
+                .limit(40 if settings.agent_runtime_enabled else 4)
             )
         ).scalars()
     )
@@ -66,7 +86,6 @@ async def _prepare(
         )
         for message in recent
     ]
-    settings = get_settings()
     llm_provider = get_llm_provider(settings)
     scope = _scope(item)
     rewrite = await rewrite_query(
@@ -113,7 +132,9 @@ async def _prepare(
             element_kind=result.element_kind,
             cell_ids=result.cell_ids,
             bboxes=[BBoxOut.model_validate(box) for box in result.bboxes],
-            content=result.context_content,
+            content=result.raw_content
+            if settings.agent_runtime_enabled
+            else result.context_content,
             truncated=False,
         )
         sources.append(source)
@@ -123,6 +144,19 @@ async def _prepare(
             f"Chunk-ID: {result.chunk_id}\nContent:\n{result.context_content}"
         )
     messages = build_messages(build_system_prompt("\n\n".join(blocks)), history, body.query)
+    if settings.agent_runtime_enabled:
+        try:
+            counter = await asyncio.to_thread(LocalTokenCounter, settings.agent_tokenizer_path)
+            messages, sources = build_grounded_context(
+                sources,
+                [LLMMessage(role, content) for role, content in history],
+                body.query,
+                counter,
+                settings.llm_context_tokens,
+            )
+            citation_map = {s.index: str(s.chunk_id) for s in sources}
+        except AgentError as exc:
+            raise DependencyUnavailableError(code=exc.code) from exc
     return item, user, search, messages, citation_map, sources
 
 
@@ -132,7 +166,11 @@ async def chat(
 ) -> ChatResponse:
     _item, _user, search, messages, citation_map, sources = await _prepare(db, body)
     try:
-        response = await get_llm_provider().generate(messages)
+        response = await get_llm_provider().generate(
+            messages,
+            max_tokens=1500 if get_settings().agent_runtime_enabled else None,
+            reasoning_effort=_generation_effort(),
+        )
     except LLMError as exc:
         raise DependencyUnavailableError(
             code="LLM_UNAVAILABLE", message="LLM is unavailable."
@@ -191,7 +229,11 @@ async def chat_stream(
         parts: list[str] = []
         refusal_gate = RefusalStreamGate()
         try:
-            async for chunk in get_llm_provider().stream(messages):
+            async for chunk in get_llm_provider().stream(
+                messages,
+                max_tokens=1500 if get_settings().agent_runtime_enabled else None,
+                reasoning_effort=_generation_effort(),
+            ):
                 if chunk.text:
                     visible = refusal_gate.feed(chunk.text)
                     if visible:

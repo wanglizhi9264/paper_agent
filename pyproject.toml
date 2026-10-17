@@ -25,6 +25,7 @@ dependencies = [
     "pymupdf>=1.28.2",
     "python-docx>=1.2.0",
     "markdown-it-py>=4.2.0",
+    "langgraph>=1,<2",
 ]
 
 [project.optional-dependencies]
@@ -106,7 +107,8 @@ packages = ["app"]
 exclude = ["migrations/", "frontend/", "storage/", "eval/"]
 
 [[tool.mypy.overrides]]
-module = ["arq.*", "faiss.*", "sentence_transformers.*", "jieba.*", "pymupdf.*", "docx.*", "docx.oxml.*", "docx.table.*", "docx.text.*", "markdown_it.*"]
+# tokenizers' Rust wheel has no py.typed; its dynamic boundary is confined to LocalTokenCounter.
+module = ["arq.*", "faiss.*", "sentence_transformers.*", "tokenizers.*", "jieba.*", "pymupdf.*", "docx.*", "docx.oxml.*", "docx.table.*", "docx.text.*", "markdown_it.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

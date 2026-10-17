@@ -4,12 +4,20 @@
 
 ## 1. 当前状态
 
-更新时间：2026-10-05
+更新时间：2026-10-17
 
 > 2026-08-25 生产审计纠正：下列历史 Phase 3–12 条目仅表示独立模块或 fake-driven 测试曾存在，不代表生产端到端已接通。当前权威状态以本节顶部“恢复实施状态”和 `docs/spec.md` §22.1–22.2 为准。
 
 ### 恢复实施状态
 
+- 2026-10-17 已接通可选 Paper Agent Runtime：共享 tokenizer/context packing、JSON/native 工具协议、六个只读工具、四个 SKILL.md 技能与按需资源、LangGraph、PostgreSQL checkpoint/event/step/evidence/outbox、lease/fencing、ARQ 恢复、REST/SSE、前端 `/agent`。仓库默认关闭；本机启动脚本显式启用并仅监听 loopback。真实 DeepSeek/E5/BGE HTTP 闭环已成功：4 次工具、5 次 LLM、15 条实际来源、2533 字答案、47 个 SSE 事件、唯一完成终态；这只是运行 smoke，不是答案质量发布门通过。
+- Agent 工程质量门已实跑：后端全量 822 passed / 9 skipped；另外真实 PostgreSQL migration/锁/fencing/恢复/原子提交集成 6 passed；前端 lint/typecheck、14 个测试与生产 build 通过。新增表格测试验证原始数值/单位、表头、cell IDs 与 bbox；优雅中断可显式 resume，期限和预算不重置。浏览器页面视觉检查因访问权限被拒绝而未执行，未改用其他浏览器绕过。
+- Agent 新 dev/holdout 的人工 Gold、语义 claim/citation/table 审核及 baseline 质量对照尚未完成；`eval/agent_eval.py` 提供显式数据集运行入口，不自动生成或反改 Gold。旧 standard-v2 test 未运行。当前保持 opt-in，不能把带引用 smoke 当作 Recall/Citation/表格准确率达标。
+
+- 2026-10-16 完成 Paper Agent Runtime 设计文档 `docs/paper-agent-runtime-spec.md`，涵盖精确上下文预算、只读工具协议、SKILL.md 渐进加载、运行状态与事务恢复、API/SSE、论文任务评测。参考官方 PaperQA/LangGraph/Agent Skills；已同步主 spec/proposal 的适用边界。本次未实现功能、未新增依赖、未改变运行默认值；A1–A5 均待实施。生产 chat 当前 DB 历史窗口为 4 条，prompt helper 的 8 条上限不等于实际窗口。
+  决策：采用独立补充规格与 opt-in 路线，保留既有检索/引用契约；影响文件为上述文档、`docs/spec.md`、`docs/proposal.md` 与本记录。验证：`git diff --check` 通过；PowerShell 本地链接/代码围栏检查通过；文档变更未运行代码测试。
+
+- 2026-10-05 完成 standard-v2 answerable dev actual-generation-context 逐层 provenance：固定既有 production-default/off 配置重放 37 题，旧 Full Pipeline 捕获的 21 个 context miss 分类为 `RAW_UNION_MISS=15`、`LOST_IN_FUSION=1`、`LOST_IN_RERANK=3`、`OTHER=2`，其余层均为 0；33/37 严格顺序一致、34/37 context 成员一致，两道多轮重放漂移题保守不归因。主瓶颈是 candidate retrieval；未运行 frozen test，未改算法、Gold、benchmark、prompt 或默认值。
 - 2026-10-05 仅在 standard-v2 answerable dev 完成 source-aware candidate promotion M=2/3/5 严格 Top30 实验：同轮 baseline/M2/M3/M5 Recall@10 为 **.5045/.4865/.4730/.4820**，reranker-input recall 为 **.6351/.5766/.5766/.5991**，`LOST_BEFORE_RERANK_DEPTH` 为 **7/9/10/9**。7 个 baseline depth loss 的最佳来源为 Dense-English 2、BM25-English 5，但最佳 source rank 均在 6 名以后，top-5 promotion 无法救回且会挤出原候选，结论 `PROMOTION: REJECT`，默认保持 off，frozen test 未运行。
 - 2026-10-05 修复 Citation 评测可观测性：Full Pipeline prediction 现在持久化生成时实际 `context_chunk_ids`，诊断拒绝用随后独立 search 或 retrieval-only trace 冒充生成 context。新跑 37 道 answerable dev 得到 actual-context miss 21、context hit+citation hit 13、context hit+citation miss 3；3 个 miss 全部无有效 citation，其中 2 个错误拒答、1 个使用未被 `[N]` parser 接受的 `[Source N]`。因此 claim-evidence 过滤不能修复当前失败，结论 `CITATION GROUNDING: NOT YET`；旧 gate 的 citation P/R 数值仍有效，但其三阶段归因不可审计。
 - 2026-10-04 `2231190` 候选完成一次 standard-v2 frozen-test gate，配置严格锁定为 four-way RRF + rescue top-10 + rerank depth30 + original rerank query（source/fusion depth 100）。Frozen answerable test R@10/MRR/nDCG@10 为 **.5667/.5000/.5004**，高于 dev **.5045/.4062/.3912**，但完整 60 题 overall R@10/Citation P/Citation R/拒答/延迟为 **.5224/.1930/.4021/1.0/11.55s**，未达 release 门槛，结论 `FAIL FROZEN GATE`。60/60 prediction errors=0；不再使用本 test 调参。
@@ -173,6 +181,17 @@ max_upload_bytes: 104857600
 
 ## 7. 决策日志
 
+2026-10-17：用户明确要求完整实现，撤回自行缩成 CLI 的范围例外；CLI 仅保留为辅助。
+采用 LangGraph 1.2.15（MIT）并锁定依赖，服务自有 checkpoint 与业务状态同事务提交，
+不使用独立 saver 双写、不启用 LangSmith 云追踪。21 个新增/相关发行包 manifest 文件实测
+11.54 MiB（不含 ML 栈、缓存与 pyc）；传递许可含 MIT、Apache-2.0、BSD，orjson 为
+MPL-2.0 AND (Apache-2.0 OR MIT)，保留安装包许可。替代方案为自研状态机，此次按 spec
+选 LangGraph；无额外 PostgreSQL saver。影响：`app/agent`、agent services/API/worker/models、
+0004/0005 migrations、frontend Agent 页面、README、spec/proposal、lockfile。
+DeepSeek V4 采用固定 SHA tokenizer 与显式非 thinking JSON adapter；原生协议需有工具
+chat template 的 tokenizer 与显式 supports_tools 配置。重启保留预算，模型/技能版本漂移
+拒绝恢复，GPU 通过 PostgreSQL gate 跨进程串行。普通单元测试不下载模型。
+
 | 日期 | 决定 | 原因 | 影响 |
 | --- | --- | --- | --- |
 | 2026-08-24 | MVP 单机单用户且无鉴权 | 目标为本地个人论文助手 | bind、CORS、schema 不含 owner/tenant |
@@ -254,6 +273,16 @@ max_upload_bytes: 104857600
 
 ## 8. 验证记录
 
+### 2026-10-17 Paper Agent Runtime
+
+- `uv run --no-sync mypy app`：119 个源文件通过。
+- `uv run --no-sync pytest -q -p no:cacheprovider --basetemp storage/_test/pytest-agent-complete`：822 passed、9 skipped；6 个 PostgreSQL 集成测试另行开启 `--run-integration` 全部通过，3 个既有真实 parser/private release smoke 未运行。
+- `uv run --no-sync python` 包装环境后执行 `pytest -q tests/integration/test_agent_trial.py tests/integration/test_migration.py --run-integration -p no:cacheprovider --basetemp storage/_test/pytest-agent-pg-final`：6 passed，使用独立临时数据库，未清空用户论文库。
+- `npm --prefix frontend run lint`、`run typecheck`、`test -- --run`、`run build`：通过，14 个测试，包含 Agent 页 loading/error/空状态与持久化来源绑定。
+- `uv run --no-sync ruff check app tests eval/agent_eval.py`、`ruff format --check app tests eval/agent_eval.py`、`uv lock --check`、`git diff --check`：通过；tokenizers Rust wheel 缺少 py.typed，已在既有 third-party mypy override 明确记录边界理由，无新增行级 ignore。
+- 真实 HTTP smoke：幂等 create 202、ARQ 调用、实际 E5/BGE 检索、DeepSeek JSON action 与最终 SSE、47 个持久化事件和唯一完成终态已核验。早期失败为 tokenizer 冷加载、table_raw_text 契约、provider null delta/默认 thinking，修复后获得有来源答案；不把失败或拒答轮作为成功运行证据。
+- 最后边界检查：`pytest -q tests/unit/test_agent_runs.py tests/unit/test_agent_trial_store.py tests/unit/test_agent_api.py tests/unit/test_llm.py tests/unit/test_retrieval_evidence_service.py -p no:cacheprovider --basetemp storage/_test/pytest-agent-last-boundaries`：49 passed；最终来源提交使用文档共享锁，避免删除与完成消息提交交叉；`tests/integration/test_agent_trial.py --run-integration` 在新临时库重跑 2 passed。服务 health/live 与 skills 均 200，4 个技能可用。
+
 | 日期 | 范围 | 命令/检查 | 结果 |
 | --- | --- | --- | --- |
 | 2026-08-24 | 文档 | `wc -l`、代码围栏计数、heading inventory、关键术语/占位符 `rg` 检查 | 4 个文件共 1309 行；围栏均成对；章节完整；无阻塞占位符 |
@@ -310,6 +339,7 @@ max_upload_bytes: 104857600
 | 2026-10-04 | 下一 frozen-test gate 候选为 four-way RRF + rescue top-10 + rerank depth 30 + original query；所有 production 默认保持不变 | best-rank final R@10 .4550，English rerank .4414，depth 50/80/100 为 .4595/.4459/.4369，均劣于 rescue-10 的 .5045；扩大候选把主要损失转移到 reranker | `app/retrieval/fusion.py`、`app/services/retrieval.py`、`eval/ranking_pipeline_ab.py`、spec §14.10、dev 聚合报告 |
 | 2026-10-04 | `2231190` frozen gate 结论为 `FAIL FROZEN GATE`，不得再用 standard-v2 test 调参 | test R@10 .5667 证明没有 dev 过拟合式崩溃，但 overall R@10 .5224、Citation P .1930、Citation R .4021 均未达发布门槛；当时的 retrieval/citation stage split 后经审计发现没有保存 actual context，不能作为独立瓶颈计数依据 | 候选清单、`eval/frozen_test_gate.py`、frozen gate 报告、本机 ignored 原始结果 |
 | 2026-10-05 | Source-aware top-M promotion 拒绝，保留默认关闭；claim-evidence grounding 暂不实现 | M=2/3/5 均降低 Recall@10 并增加 depth loss；actual-context 的 3 个 citation miss 全部是空 citation（2 个错误拒答、1 个 marker 格式不合约），过滤器无法恢复 | promotion helper/config/dev A/B、actual-context citation diagnostic、spec §14.10/§15 |
+| 2026-10-05 | generation-context loss 的下一调查层只定为 candidate retrieval | 21 个捕获 miss 中 15 个在 scoped raw union 已无完整 Gold group；fusion 1、rerank 3，evidence selection/SearchResponse/context packing/table expansion 均为 0。两道 context membership 漂移的多轮题保留为 `OTHER`，不以当前重放倒推历史 | `eval/context_loss_provenance_dev.py`、context-loss 报告与 ignored private diagnostic |
 
 | 2026-09-04 | evidence selection 实现 | `pytest -q`；changed-file Ruff/format；`mypy app`；真实 BGE offline smoke/cache；前端 lint/typecheck/test/build；真实 dev CLI fail-closed 尝试 | **650 通过、7 skipped**；Ruff/format 与 mypy 101 files 通过；BGE 返回有限 scores 且同配置缓存复用；前端 6 tests/build 通过；真实 A/B 因 Docker error 1920 在 DB 前失败，CLI exit 2 且未生成结果文件。仓库级 Ruff 另被用户未跟踪 `tmp/` 实验脚本阻塞，未改这些无关文件。 |
 | 2026-09-04 | bounded evidence workflow 与运行环境 | `uv lock --check`；changed-scope Ruff/format；`mypy app`；`pytest -q`；前端 lint/typecheck/test/build；CUDA E5/BGE；真实 DeepSeek 合成 planner；临时 Uvicorn health | lock 162 packages；Ruff/format 与 mypy 102 files 通过；pytest **669 通过、7 skipped**；前端 6 tests/build 通过；RTX 2060 上 E5 `(1,768)`/BGE 有限分数且排序正确；DeepSeek planner 600-token plan 合法；`/health/live` 200，`/health/ready` 503（Postgres/Redis/index down）。 |
@@ -329,8 +359,11 @@ max_upload_bytes: 104857600
 | 2026-10-04 | Standard-v2 frozen gate | 一次 frozen retrieval；隔离候选 API 的 60 题 DeepSeek Full Pipeline；split scorer 与 citation diagnostics | Frozen 15 answerable R@10 **.5667**，失败阶段 **0/0/5/1/9**；Full Pipeline **60/60、0 errors**，overall R@10/Citation P/R/拒答/延迟 **.5224/.1930/.4021/1.0/11.55s**。首次全零批处理是 loopback proxy transport failure，未到达 API，保留为 invalid run；有效重试仅设置 NO_PROXY，候选配置未变。 |
 | 2026-10-04 | Frozen gate 代码质量门 | changed-scope Ruff/format；`mypy app`；focused scorer/release tests；`pytest -q`；`git diff --check` | 全部通过；mypy 103 files；focused **12 passed**；全量 pytest **750 passed、7 skipped**；7 skips 为 4 migration 与 3 个显式 model/private smoke 门。 |
 | 2026-10-05 | Candidate promotion 与 actual-context Citation dev 诊断 | standard-v2 answerable dev M=2/3/5；37 题 live chat source/citation capture；changed-scope Ruff/format；`mypy app`；eval 显式 mypy；`pytest -q -p no:cacheprovider` | frozen test 未运行；promotion 严格 pool=30 且全部退化；actual-context 分类完成；Ruff/format、mypy 103 files 与 eval mypy 通过；pytest **760 passed、7 skipped**。 |
+| 2026-10-05 | Context-loss provenance dev 诊断与质量门 | 37 道 answerable dev 固定配置重放；changed-scope Ruff/format；`mypy app`；eval 显式 mypy；`pytest -q -p no:cacheprovider --basetemp=tmp/pytest-context-provenance`；`git diff --check` | 21 个 context miss 完成唯一分类；Ruff/format、mypy 103 files 与 eval mypy 通过；pytest **766 passed、7 skipped**。系统默认 pytest 临时根 ACL 拒绝访问，改用已清理的仓库内专用临时目录后全量通过。 |
 
 ## 9. 未决事项
+
+- Paper Agent 后续发布验收：准备不少于 40 条人工核验的新 dev/holdout，补齐 claim 语义、表格数值/单位、跨论文条件与 baseline 配对报告；当前 engineering smoke 和自动化安全测试不能替代质量门。浏览器视觉 QA 需用户允许页面访问后再进行。
 
 当前没有阻塞代码生成的产品问题。实现阶段仍需通过实际环境确定：
 
@@ -361,3 +394,10 @@ max_upload_bytes: 104857600
 ```
 
 保持本文件简洁。详细 API、字段、算法和测试要求只写入 `docs/spec.md`，不要在 memory 中维护第二份容易漂移的规范。
+
+### 2026-10-17 Vue 问答开发快照
+
+- 用户要求 Vue 页面：`/`、`/agent` 已使用 Vue 3 + TanStack Vue Query，加入浅色研究工作台、技能/范围、执行计时、Markdown、原文侧栏、中文证据缺口提示；其他管理/review 仍 React，旧聊天 `/legacy-chat`。前端 lint/typecheck、19 tests 与 build 实跑通过；Vue 问答 JS 218.60 kB / gzip 84.48 kB，独立懒加载 React。本地 CI Node 调整为 24 以适配 Vite；GitHub OAuth 缺少 workflow scope，该 CI 文件暂不包含在上传提交。浏览器 origin 曾被拒绝，未绕过执行视觉验收。
+- 本次用户问题复现：旧单轮 Top10 含 baseline 行而没有目标方法行，warm search 1.94 秒、重启后 cold search 23.33 秒。Agent 真实复测 26.62 秒仍拒答；已接通 IR 表格行目录、40 cells 限额提示与选行表头修正，但发现同 chunk 后一次表格读取覆盖先前不同单元格证据，继续修复中。不得记作答案问题已解决。
+- 验证：全量 `uv run --no-sync pytest -q -p no:cacheprovider --basetemp storage/_test/pytest-vue-complete` 823 passed / 9 skipped；最后变更后 Agent focused 21 passed，Ruff check/format 与 mypy app 119 files 通过。前端 lint/typecheck/test/build 再跑通过。现有 PostgreSQL 集成上轮已跑，本轮无 schema 变化未重跑。未触碰冻结 test/Gold。
+- 新依赖与用途、MIT 许可、bundle 体积和替代方案见 proposal §27；Vue 用户要求覆盖原 React-only 约定，已同步 AGENTS/spec/README。新增 `docs/code-tour.md` 供学习阅读。

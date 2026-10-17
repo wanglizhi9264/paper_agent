@@ -2,17 +2,23 @@ from __future__ import annotations
 
 from typing import Any, ClassVar
 
+from arq import cron
 from arq.connections import RedisSettings
 
 from app.core.config import get_settings
 from app.core.logging import configure_logging
+from app.workers.agent import agent_run, cleanup_agent_runs, dispatch_pending
 from app.workers.tasks import functions as _task_functions
 
 
 class WorkerSettings:
     """ARQ worker settings."""
 
-    functions: ClassVar[list[Any]] = list(_task_functions)
+    functions: ClassVar[list[Any]] = [*_task_functions, agent_run]
+    cron_jobs: ClassVar[list[Any]] = [
+        cron(dispatch_pending, second=set(range(0, 60, 5)), run_at_startup=True),
+        cron(cleanup_agent_runs, hour=3, minute=0),
+    ]
     redis_settings: ClassVar[RedisSettings] = RedisSettings.from_dsn(get_settings().redis_url)
     max_jobs: ClassVar[int] = 1
     job_timeout: ClassVar[int] = 1800

@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.errors import DependencyUnavailableError, IndexUnavailableError, NotFoundError
 from app.core.config import Settings, get_settings
+from app.core.gpu import acquire_gpu_slot
 from app.embedding.base import EmbeddingProvider
 from app.index.faiss_index import FaissIndex
 from app.models.chunk import Chunk
@@ -41,8 +42,11 @@ async def search_corpus(
     settings: Settings | None = None,
     retrieval_queries: RetrievalQueries | None = None,
     translation_latency_ms: float = 0.0,
+    pinned_snapshot_id: uuid.UUID | None = None,
+    pinned_versions: dict[uuid.UUID, uuid.UUID] | None = None,
 ) -> SearchResponse:
     settings = settings or get_settings()
+    await acquire_gpu_slot(session)
     started = perf_counter()
     timings: dict[str, float] = {}
     original_query = original_query or request.query
@@ -51,7 +55,7 @@ async def search_corpus(
         raise ValueError("RetrievalQueries.original must match SearchRequest.query")
     state = await session.get(SystemState, 1)
     snapshot = (
-        await session.get(IndexSnapshot, state.active_index_snapshot_id)
+        await session.get(IndexSnapshot, pinned_snapshot_id or state.active_index_snapshot_id)
         if state is not None and state.active_index_snapshot_id is not None
         else None
     )
@@ -64,6 +68,8 @@ async def search_corpus(
         )
 
     document_ids = await _resolve_scope(session, request)
+    if pinned_versions is not None:
+        document_ids &= set(pinned_versions)
     chunk_rows = list(
         (
             await session.execute(
@@ -72,7 +78,11 @@ async def search_corpus(
                 .where(
                     Chunk.faiss_id.is_not(None),
                     Chunk.document_id.in_(document_ids),
-                    Chunk.document_version_id == Document.active_document_version_id,
+                    (
+                        Chunk.document_version_id.in_(list(pinned_versions.values()))
+                        if pinned_versions is not None
+                        else Chunk.document_version_id == Document.active_document_version_id
+                    ),
                     Document.status == DocumentStatus.READY,
                 )
             )
@@ -245,11 +255,7 @@ async def search_corpus(
     except RerankError:
         degraded_reasons.append("RERANK_UNAVAILABLE")
     timings["rerank"] = (perf_counter() - stage_started) * 1000
-    active_version_ids = {
-        document.active_document_version_id
-        for _chunk, document in chunk_rows
-        if document.active_document_version_id is not None
-    }
+    active_version_ids = {chunk.document_version_id for chunk, _document in chunk_rows}
     table_chunks = list(
         (
             await session.execute(

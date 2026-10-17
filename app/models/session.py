@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import CheckConstraint, ForeignKey, Index, String, Text
+from sqlalchemy import CheckConstraint, ForeignKey, Index, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -60,6 +60,13 @@ class Message(Base):
         String(16), nullable=False, default=MessageStatus.COMPLETE
     )
     content: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    run_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(
+            "agent_runs.id", use_alter=True, name="fk_message_agent_run", ondelete="SET NULL"
+        ),
+        nullable=True,
+    )
+    message_sequence: Mapped[int | None] = mapped_column(nullable=True)
     citations: Mapped[list[dict[str, Any]] | None] = mapped_column(jsonb(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=func.now())
 
@@ -70,4 +77,11 @@ class Message(Base):
         CheckConstraint("status IN ('complete','interrupted')", name="ck_message_status_enum"),
         Index("ix_messages_session_id", "session_id"),
         Index("ix_messages_created_at", "created_at"),
+        Index(
+            "uq_message_run_complete",
+            "run_id",
+            unique=True,
+            postgresql_where=text("role='assistant' AND status='complete' AND run_id IS NOT NULL"),
+            sqlite_where=text("role='assistant' AND status='complete' AND run_id IS NOT NULL"),
+        ),
     )

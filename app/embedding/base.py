@@ -84,7 +84,8 @@ class EmbeddingProvider(Protocol):
     The adapter is responsible for adding query/passage prefixes.
     """
 
-    manifest: ModelManifest
+    @property
+    def manifest(self) -> ModelManifest: ...
 
     def embed_texts(self, texts: list[str], *, is_query: bool = False) -> EmbeddingResult:
         """Embed *texts*. When ``is_query`` is True, use the query prefix."""

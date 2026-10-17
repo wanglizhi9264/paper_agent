@@ -15,6 +15,31 @@ from app.llm.openai_compatible import FakeLLMProvider, OpenAICompatibleProvider
 from app.llm.prompts import build_messages, build_rewrite_prompt, build_system_prompt
 
 
+async def test_stream_accepts_role_delta_with_null_content(monkeypatch):
+    import httpx
+
+    original = httpx.AsyncClient
+    content = (
+        'data: {"choices":[{"delta":{"role":"assistant","content":null},"finish_reason":null}]}\n\n'
+        + 'data: {"choices":[{"delta":{"content":"Supported [1]."},"finish_reason":null}]}\n\n'
+        + 'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n'
+    )
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200, text=content, headers={"content-type": "text/event-stream"}
+        )
+    )
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: original(transport=transport))
+    chunks = [
+        chunk
+        async for chunk in OpenAICompatibleProvider("http://test/v1", "test", "model").stream(
+            [LLMMessage("user", "Question")]
+        )
+    ]
+    assert "".join(chunk.text for chunk in chunks) == "Supported [1]."
+    assert chunks[-1].finish_reason == "stop"
+
+
 @pytest.mark.asyncio
 async def test_fake_llm_generate() -> None:
     provider = FakeLLMProvider()

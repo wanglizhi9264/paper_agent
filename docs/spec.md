@@ -1,8 +1,8 @@
 # Paper RAG Assistant 技术规格
 
 > 状态：Approved for implementation（实现重新验收中）
-> 版本：1.3.0
-> 最后更新：2026-10-02
+> 版本：1.4.0
+> 最后更新：2026-10-17
 > 目标环境：单机、单用户、NVIDIA RTX 2060（按 6 GB 显存预算）
 
 ## 1. 文档约定
@@ -16,7 +16,7 @@
 - MVP 是单机、单用户、本地优先的论文知识库，不实现登录、租户或角色权限。
 - MVP 支持文本型 PDF、DOCX 和 Markdown；扫描 PDF OCR、复杂公式恢复、跨页表格重建不在 MVP 范围。
 - 上传后的解析、切片和建索引由 Redis + ARQ worker 异步执行。
-- 前端使用 React + Vite + TypeScript，界面为浅色、克制、Apple 风格。
+- 按用户 2026-10-17 明确要求，问答 `/` 与 `/agent` 使用 Vue 3 + Vite + TypeScript strict，界面为浅色、克制、Apple 风格。管理与 review 页面分阶段迁移，当前仍为 React，独立懒加载；旧聊天入口为 `/legacy-chat`。
 - Collection 是用户可管理的论文集合，一篇文档可以属于多个 Collection。
 - 必须支持删除、重新索引和失败任务重试，并保证数据库、索引与文件的一致性。
 - 模型必须可配置、可下载、可替换；业务层禁止依赖具体模型 SDK。
@@ -83,7 +83,7 @@
 
 ### 5.2 前端
 
-- React 18+、Vite、TypeScript strict；
+- Vue 3（问答）、React 18+（现有管理/review）、Vite、TypeScript strict；
 - React Router；
 - TanStack Query；
 - 原生 CSS variables 或 CSS Modules；除非提案更新，不引入大型 UI 框架。
@@ -882,7 +882,16 @@ resolver 冻结；旧题保留，不得删除困难题或依据 Retriever 返回
 - 评测门：先保存 dev/test baseline；候选质量门为 Recall@10 ≥ 0.85、Citation Precision ≥ 0.95、Citation Recall ≥ 0.85、Unanswerable rejection ≥ 0.80。首次真实 baseline 未达门时不得伪称通过，必须保存结果和错误分类；
 - 恢复门：reindex 失败继续使用旧版本检索，delete 后所有 scope 不再返回被删文档，Worker/API 重启后 queued/running job 可恢复或明确失败重试。
 
-## 23. 参考资料
+## 23. 可选 Paper Agent Runtime 设计（2026-10-16）
+
+新增上下文管理、工具调用、运行时技能加载和执行恢复的设计见
+[`paper-agent-runtime-spec.md`](./paper-agent-runtime-spec.md)。该文档为待实施的补充契约，
+不表示能力已实现；Agent 模式默认关闭，原 chat/search 默认行为保持本文件规定。
+§14.7–14.8 的调用限制适用于既有工作流；新 Agent 模式使用补充规格的独立硬预算。
+其边界仍为有界、本地、单 Agent、只读工具，不授权自主联网、任意脚本执行或扩大 Session scope。
+依赖、数据库和 API 变更须按补充规格纵向切片验收后落地。
+
+## 24. 参考资料
 
 - [multilingual-e5-base model card](https://huggingface.co/intfloat/multilingual-e5-base)
 - [BGE reranker model card](https://huggingface.co/BAAI/bge-reranker-base)

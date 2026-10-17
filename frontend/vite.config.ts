@@ -1,5 +1,6 @@
 /// <reference types="vitest/config" />
 import react from "@vitejs/plugin-react";
+import vue from "@vitejs/plugin-vue";
 import { defineConfig } from "vite";
 import { readFile } from "node:fs/promises";
 import { readdir } from "node:fs/promises";
@@ -67,7 +68,7 @@ const apiBase = process.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), {
+  plugins: [vue(), react(), {
     name: "local-private-gold-review",
     configureServer(server) {
       server.middlewares.use("/__local_gold_review", async (request, response) => {

@@ -11,6 +11,15 @@ ReasoningEffort = Literal["none", "low", "high", "max"]
 class LLMMessage:
     role: str  # "system" | "user" | "assistant"
     content: str
+    tool_call_id: str | None = None
+    tool_calls: list[dict[str, object]] = field(default_factory=list)
+
+
+@dataclass
+class LLMActionResponse:
+    message: LLMMessage
+    usage: LLMUsage = field(default_factory=lambda: LLMUsage())
+    finish_reason: str = "stop"
 
 
 @dataclass
@@ -61,6 +70,16 @@ class LLMProvider(Protocol):
         reasoning_effort: ReasoningEffort | None = None,
     ) -> LLMResponse: ...
 
+    async def generate_action(
+        self,
+        messages: list[LLMMessage],
+        tools: list[dict[str, object]],
+        *,
+        max_tokens: int = 600,
+        timeout: float = 45,
+        reasoning_effort: ReasoningEffort | None = None,
+    ) -> LLMActionResponse: ...
+
     def stream(
         self,
         messages: list[LLMMessage],
@@ -68,4 +87,5 @@ class LLMProvider(Protocol):
         temperature: float = 0.3,
         max_tokens: int | None = None,
         timeout: float | None = None,
+        reasoning_effort: ReasoningEffort | None = None,
     ) -> AsyncIterator[StreamChunk]: ...

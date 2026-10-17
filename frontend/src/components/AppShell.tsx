@@ -6,8 +6,9 @@ export function AppShell() {
       <aside className="sidebar">
         <header className="brand">Paper RAG</header>
         <nav className="nav">
-          <NavLink to="/" end className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}>
-            Chat
+          <a href="/agent" className="nav-link">论文问答（Vue）</a>
+          <NavLink to="/legacy-chat" end className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}>
+            旧版 Chat
           </NavLink>
           <NavLink to="/documents" className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}>
             Documents

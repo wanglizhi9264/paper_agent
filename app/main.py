@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.responses import Response
 
+from app.api.agent import router as agent_router
 from app.api.chat import router as chat_router
 from app.api.collections import router as collections_router
 from app.api.dependencies import RequestContextMiddleware
@@ -71,6 +72,7 @@ def create_app() -> FastAPI:
     app.include_router(search_router)
     app.include_router(sessions_router)
     app.include_router(chat_router)
+    app.include_router(agent_router)
 
     @app.exception_handler(AppError)
     async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:

@@ -29,6 +29,57 @@ PDF Ingestion V2 is a staged architecture upgrade. V2-0 through V2-2 are accepte
 
 ## Quick Start
 
+### Paper Agent 网页与持久化运行（2026-10-16）
+
+Vue 3 问答页现为默认 `/` 与 `/agent`：支持论文范围与技能选择、执行进度与等待计时、Markdown 回答、原文侧栏、中文证据不足提示、取消和恢复。管理/review 页面暂保留 React，旧单轮聊天位于 `/legacy-chat`。迁移依据为用户 2026-10-17 明确要求。
+LangGraph 调度有界工具循环；PostgreSQL 保存 checkpoint/事件/租约/fencing/outbox，ARQ
+执行并恢复后台任务。默认关闭，不改变现有 chat 的默认检索策略。
+
+在仓库根目录执行，先启动 Docker Desktop 和 `docker compose up -d`，使用已有 ready 论文库。
+GPU 检索与 ingestion 使用跨进程 PostgreSQL gate，ARQ max_jobs=1。
+
+```powershell
+# 已有 .env 和本机 ML 环境。仅首次迁移；从 .env 取 URL，不打印密钥。
+uv run python -c "import os; from app.core.config import get_settings; from alembic.config import Config; from alembic import command; os.environ['PAPER_RAG_DATABASE_URL']=get_settings().database_url; command.upgrade(Config('alembic.ini'),'head')"
+
+# 当前本机 DeepSeek V4：只下载官方 tokenizer/config/license，不下载模型权重。
+# 其它模型需使用对应 tokenizer（带 HF chat template），去掉 --chat-format deepseek-v4。
+uv run python -m app.cli.paper_agent --setup-tokenizer deepseek-ai/DeepSeek-V4-Flash --chat-format deepseek-v4
+
+# 启动 API + Worker + 前端；仅监听本机，并使用已缓存 E5/BGE。
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-agent.ps1
+# 浏览器打开 http://127.0.0.1:5173/agent
+
+# 以下 CLI 是辅助入口，不替代网页/API。
+uv run python -m app.cli.paper_agent --list-skills
+uv run python -m app.cli.paper_agent --query "请说明 DDPM 的核心方法和训练目标" --skill method-analysis
+
+# 控制论文范围 / 继续同一会话（ID 使用程序打印值）
+uv run python -m app.cli.paper_agent --document-id DOCUMENT_UUID --query "分析这篇论文的实验" --skill experiment-audit
+uv run python -m app.cli.paper_agent --session-id SESSION_UUID --query "它有哪些局限？" --skill paper-reading
+uv run python -m app.cli.paper_agent --show-run RUN_UUID
+uv run python -m app.cli.paper_agent --resume RUN_UUID
+```
+
+首次调用可能需要加载已准备的 E5/BGE。不会自动下载 tokenizer；普通 CI 不下载模型。
+每个 run 最多 4 次 action、8 次模型调用、10 次工具调用、4 次 search、32000 累计 token、180 秒。
+Ctrl+C 或进程退出后可显式 resume；已提交的工具步骤复用，但期限/预算不重置，
+未提交的只读工具/模型调用可重试并可能重复计费。模型/skill/tokenizer 或 active snapshot
+变化会拒绝恢复。失败 run 不可 resume，需新 query。JSON action 错误、无效引用或预算错误
+返回稳定错误码；日志保存在本机数据库，`--show-run` 不输出论文正文。
+
+完整契约见 [Runtime spec](docs/paper-agent-runtime-spec.md)。公共 API 包括
+`POST /api/v1/agent/runs`（必填 Idempotency-Key）、run 查询、events SSE、cancel/resume 与 skills。
+网页断开不取消任务，刷新后恢复同一 run；自动恢复最多两次且不重置期限/预算。
+原生工具协议适用于经过验证、含工具 chat template 的 tokenizer；当前 DeepSeek V4 使用
+显式 JSON adapter。自定义技能可用 `--validate-skill PATH` / `--enable-skill PATH` 审核启用，
+不执行 scripts。评测入口为 `python -m eval.agent_eval --help`，需要人工核验的新 dev/holdout；
+既有 standard-v2 test 不再用于选参，工程检查通过不表示论文质量发布门通过。
+
+LangGraph 1.2.15（MIT）已锁定；它的 checkpoint 与 LangChain/LangSmith SDK 是传递依赖，
+不启用 LangSmith 云追踪，启动脚本明确关闭 tracing。采用服务自有事务 checkpoint，避免
+框架 saver 与业务数据库独立双写；未采用额外 PostgreSQL saver。安装体积与实际验证见 memory。
+
 ```bash
 # 1. Backend deps (core + dev)
 uv sync --all-groups
@@ -249,7 +300,7 @@ Real model smoke tests use the `model_smoke` marker and are never run in CI.
 | `app/api/` | FastAPI routes: health, documents, collections, jobs, search, sessions, chat |
 | `app/models/` | SQLAlchemy ORM: Document, DocumentVersion, Chunk, Collection, IngestionJob, IndexSnapshot, SystemState, Session, Message, RetrievalLog |
 | `app/db/` | Async SQLAlchemy engine + session management |
-| `frontend/` | React + Vite + TypeScript: Documents, Collections, Chat (SSE streaming, source drawer) |
+| `frontend/` | Vue 3 问答 + Vite + TypeScript strict；React 管理/review 页面分页面懒加载 |
 
 See [`docs/architecture.md`](docs/architecture.md) for detailed architecture and [`docs/retrieval-design.md`](docs/retrieval-design.md) for the retrieval pipeline design.
 

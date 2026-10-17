@@ -84,6 +84,15 @@ class Settings(BaseSettings):
     llm_context_tokens: int = 8192
     llm_request_timeout_seconds: float = 120.0
 
+    # Paper Agent is opt-in; configuration never changes the legacy chat defaults.
+    agent_runtime_enabled: bool = False
+    agent_action_protocol: Literal["json", "native"] = "json"
+    agent_supports_tools: bool = False
+    agent_reasoning_effort: Literal["provider_default", "none", "low", "high", "max"] = "none"
+    agent_tokenizer_path: Path = Path("storage/models/agent-tokenizer")
+    agent_skill_root: Path = Path("agent_skills")
+    agent_retention_days: int = Field(default=30, ge=1, le=365)
+
     # --- GPU ---
     cuda_device: str = "cuda:0"
     gpu_max_concurrency: int = 1

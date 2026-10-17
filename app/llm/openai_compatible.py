@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator
 from typing import Any, cast
 
 from app.llm.base import (
+    LLMActionResponse,
     LLMError,
     LLMMessage,
     LLMProvider,
@@ -53,6 +54,7 @@ class FakeLLMProvider:
         temperature: float = 0.3,
         max_tokens: int | None = None,
         timeout: float | None = None,
+        reasoning_effort: ReasoningEffort | None = None,
     ) -> AsyncIterator[StreamChunk]:
         words = self._template.split()
         for i, word in enumerate(words):
@@ -67,6 +69,17 @@ class FakeLLMProvider:
                 total_tokens=(sum(len(m.content) for m in messages) + len(self._template)) // 4,
             ),
         )
+
+    async def generate_action(
+        self,
+        messages: list[LLMMessage],
+        tools: list[dict[str, object]],
+        *,
+        max_tokens: int = 600,
+        timeout: float = 45,
+        reasoning_effort: ReasoningEffort | None = None,
+    ) -> LLMActionResponse:
+        return LLMActionResponse(LLMMessage("assistant", ""))
 
 
 class OpenAICompatibleProvider:
@@ -116,7 +129,7 @@ class OpenAICompatibleProvider:
                     json=payload,
                     headers={"Authorization": f"Bearer {self._api_key}"},
                 )
-                resp.raise_for_status()
+                check_llm_status(resp)
                 data = resp.json()
                 choice = data["choices"][0]
                 usage_data = data.get("usage", {})
@@ -139,13 +152,16 @@ class OpenAICompatibleProvider:
         temperature: float = 0.3,
         max_tokens: int | None = None,
         timeout: float | None = None,
+        reasoning_effort: ReasoningEffort | None = None,
     ) -> AsyncIterator[StreamChunk]:
         import json
 
         import httpx
 
         try:
-            payload = self._build_payload(messages, temperature, max_tokens, stream=True)
+            payload = self._build_payload(
+                messages, temperature, max_tokens, stream=True, reasoning_effort=reasoning_effort
+            )
             async with (
                 httpx.AsyncClient(timeout=timeout or self._timeout) as client,
                 client.stream(
@@ -155,7 +171,7 @@ class OpenAICompatibleProvider:
                     headers={"Authorization": f"Bearer {self._api_key}"},
                 ) as resp,
             ):
-                resp.raise_for_status()
+                check_llm_status(resp)
                 async for line in resp.aiter_lines():
                     if not line.startswith("data: "):
                         continue
@@ -167,7 +183,9 @@ class OpenAICompatibleProvider:
                     if not choices:
                         continue
                     delta = choices[0].get("delta", {})
-                    text = delta.get("content", "")
+                    text = delta.get("content") or ""
+                    if not isinstance(text, str):
+                        raise TypeError("Invalid stream content")
                     finish = choices[0].get("finish_reason")
                     usage = None
                     if "usage" in chunk_data:
@@ -181,6 +199,51 @@ class OpenAICompatibleProvider:
         except (httpx.HTTPError, json.JSONDecodeError, KeyError, IndexError, TypeError) as exc:
             raise LLMError("LLM stream or response failed", code="LLM_UNAVAILABLE") from exc
 
+    async def generate_action(
+        self,
+        messages: list[LLMMessage],
+        tools: list[dict[str, object]],
+        *,
+        max_tokens: int = 600,
+        timeout: float = 45,
+        reasoning_effort: ReasoningEffort | None = None,
+    ) -> LLMActionResponse:
+        import json
+
+        # Native tool requests use the same explicitly configured reasoning mode.
+        import httpx
+
+        try:
+            payload = self._build_payload(
+                messages, 0.0, max_tokens, False, reasoning_effort=reasoning_effort
+            )
+            payload.update(tools=tools, tool_choice="auto", parallel_tool_calls=False)
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(
+                    f"{self._base_url}/chat/completions",
+                    json=payload,
+                    headers={"Authorization": f"Bearer {self._api_key}"},
+                )
+                check_llm_status(response)
+                data = response.json()
+            choice = data["choices"][0]
+            raw = choice["message"]
+            calls = raw.get("tool_calls") or []
+            if not isinstance(calls, list) or len(calls) > 10:
+                raise LLMError("Invalid tool response", code="TOOL_ARGUMENT_INVALID")
+            usage = data.get("usage") or {}
+            return LLMActionResponse(
+                LLMMessage("assistant", raw.get("content") or "", tool_calls=calls),
+                LLMUsage(
+                    usage.get("prompt_tokens", 0),
+                    usage.get("completion_tokens", 0),
+                    usage.get("total_tokens", 0),
+                ),
+                choice.get("finish_reason", "stop"),
+            )
+        except (httpx.HTTPError, json.JSONDecodeError, KeyError, IndexError, TypeError) as exc:
+            raise LLMError("Tool request failed", code="LLM_UNAVAILABLE") from exc
+
     def _build_payload(
         self,
         messages: list[LLMMessage],
@@ -191,7 +254,7 @@ class OpenAICompatibleProvider:
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "model": self._model,
-            "messages": [{"role": m.role, "content": m.content} for m in messages],
+            "messages": [serialize_message(m) for m in messages],
             "temperature": temperature,
             "stream": stream,
         }
@@ -200,6 +263,26 @@ class OpenAICompatibleProvider:
         if reasoning_effort is not None:
             payload["reasoning_effort"] = reasoning_effort
         return payload
+
+
+def serialize_message(message: LLMMessage) -> dict[str, Any]:
+    result: dict[str, Any] = {"role": message.role, "content": message.content}
+    if message.tool_call_id is not None:
+        result["tool_call_id"] = message.tool_call_id
+    if message.tool_calls:
+        result["tool_calls"] = message.tool_calls
+    return result
+
+
+def check_llm_status(response: Any) -> None:
+    if getattr(response, "status_code", None) == 400:
+        try:
+            error = response.json().get("error", {})
+            if error.get("code") in {"context_length_exceeded", "context_window_exceeded"}:
+                raise LLMError("Context limit exceeded", code="LLM_CONTEXT_OVERFLOW")
+        except ValueError:
+            pass
+    response.raise_for_status()
 
 
 def get_llm_provider(settings: Any | None = None) -> LLMProvider:

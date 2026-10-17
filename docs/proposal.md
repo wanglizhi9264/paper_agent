@@ -452,3 +452,23 @@ Citation 诊断先修正评测可观测性：Full Pipeline 预测必须保存生
 不能把另一次 search 或 retrieval-only trace 当作 LLM context。仅在 answerable dev 上输出私有
 逐题内容诊断，公开报告只保留聚合统计。Claim-evidence grounding 是否进入下一阶段由实际
 context miss/citation miss 分解决定；本切片不自动过滤引用，也不改变 generation production 默认。
+
+## 26. 2026-10-16 Paper Agent Runtime 设计路线
+
+用户要求参考 GitHub 成熟方案编写上下文处理、工具调用与 skill 加载规格，设计交付见
+[`paper-agent-runtime-spec.md`](./paper-agent-runtime-spec.md)。实施按 A1 Context → A2 只读工具
+→ A3 持久化运行 → A4 技能 → A5 UI/评测推进；推荐 LangGraph 作为可替换执行 adapter，
+保留现有 PostgreSQL 业务事实、检索引擎和引用契约。新 API 在持久化闭环完成后才启用。
+设计交付阶段不新增运行依赖或实现；后续编码阶段保持既有检索默认值，不将框架引入当作质量提升。
+恢复的事务边界、版本固定和新 holdout 是实施硬门；既有 standard-v2 test 不用于新方案选参。
+
+
+用户明确要求完整实现补充规格；交付包括 Context、原生/JSON 工具协议、技能、LangGraph、PostgreSQL checkpoint/outbox/lease、ARQ、REST/SSE、前端与评测入口。CLI 保留为运维辅助，不替代网页和异步执行，不再采用 CLI 范围例外。
+
+## 27. 2026-10-17 Vue 问答与表格核验
+
+按用户最新指令优先迁移问答主页面到 Vue 3，采用 Composition API、TanStack Vue Query、独立 SSE composable 与安全 Markdown 渲染；保留已工作的 React 管理/review 页，分入口懒加载。`/` 和 `/agent` 为新页，`/legacy-chat` 保留旧聊天；这覆盖原 React-only 技术选择，并同步 AGENTS/spec/README。命令名称不变，typecheck/build 增加 vue-tsc 检查。
+
+用户问题复现仅用其本次提问和当前本地语料，不读取 frozen Gold 或 consumed test。诊断发现单轮检索返回 baseline 表格行而遗漏目标方法行；Agent 相近重复搜索也未解决。采用原 IR 表格行目录导航与 read_table 选行补证据，保留检索模型、排序、索引、默认策略不变，不据单题宣布总体质量达标。
+
+新增前端依赖 Vue、TanStack Vue Query、markdown-it 用于用户指定框架、服务端状态和禁 HTML 的 Markdown；plugin-vue/vue-tsc/Vue Test Utils/markdown-it types 为构建与测试依赖，均 MIT。替代为保留 React（不满足本次问答页 Vue 要求）或自行实现 Markdown（维护成本更高）。双框架分页面懒加载，不在问答页加载 React 管理 bundle；新增问答生产 JS 本次 build 约 218.54 kB / gzip 84.45 kB（包含 Vue、Query、Markdown），无模型或 CDN 运行依赖。

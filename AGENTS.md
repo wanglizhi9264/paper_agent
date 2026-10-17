@@ -20,7 +20,7 @@
 - 格式：文本型 PDF、DOCX、Markdown；OCR 与复杂论文版面不属于 MVP。
 - 后端：Python 3.12、FastAPI、SQLAlchemy、PostgreSQL、Redis、ARQ。
 - 检索：FAISS CPU FlatIP + 自研 BM25 + RRF + cross-encoder rerank。
-- 前端：React + Vite + TypeScript strict。
+- 前端：按用户 2026-10-17 指令，问答 `/` 与 `/agent` 使用 Vue 3 + Vite + TypeScript strict；管理/review 页面暂保留 React，分页面懒加载。
 - LLM：OpenAI-compatible provider；OpenCode 不是运行时依赖。
 - 默认 embedding 为 768 维 E5；任何代码都不得硬编码 768 或 1024，实际维度来自 model/index manifest。
 
@@ -66,10 +66,10 @@ models/db -> no api or worker imports
 - 捕获具体异常；转换为稳定错误码。禁止裸 `except`、吞异常或向客户端返回堆栈。
 - 日志使用结构化字段，禁止 f-string 拼接全文、prompt、token 或绝对用户路径。
 
-### 4.2 TypeScript/React
+### 4.2 TypeScript/Vue/React
 
 - 开启 `strict`，禁止新增无理由的 `any` 和非空断言。
-- 服务端状态使用 TanStack Query；流式消息状态单独封装，不在多个组件复制 SSE parser。
+- 服务端状态使用 TanStack Query（Vue 页面用 Vue Query）；流式消息状态单独封装，不在多个组件复制 SSE parser。
 - 每个异步页面必须实现 loading、empty、error、success；破坏性操作需要确认和进行中禁用。
 - UI 遵循浅色 Apple 风格：白/浅灰、近黑文本、少量系统蓝；绿色不作为主色或 glow；避免超大标题、重装饰卡片和无意义渐变。
 - 来源 marker、source drawer 与后端结构化 citation 绑定，禁止用正则猜测文档来源。
