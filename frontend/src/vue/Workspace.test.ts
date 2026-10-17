@@ -68,6 +68,15 @@ describe('Vue research workspace', () => {
     expect(w.find('[role=alert]').text()).toContain('连接失败');
     expect(w.find('[aria-label=发送问题]').attributes('disabled')).toBeDefined();
   });
+  it('hides unvalidated streamed output when the run fails citation validation', async () => {
+    localStorage.setItem('paper-agent-run', 'run1');
+    const w = setup({ ...result, status: 'failed', error_code: 'CITATION_INVALID', answer: null, sources: [] });
+    await flushPromises();
+    FakeEvents.instances[0]?.emit('answer.delta', 1, { text: 'Unvalidated statement [99]' });
+    await flushPromises();
+    expect(w.find('.prose').exists()).toBe(false);
+    expect(w.find('[role=alert]').text()).toContain('CITATION_INVALID');
+  });
   it('does not execute paper HTML or render remote image/link navigation', () => {
     const html = renderAnswer('<script>alert(1)</script> ![image](https://example.com/image) [link](javascript:alert(1))');
     expect(html).not.toContain('<script>'); expect(html).not.toContain('<img'); expect(html).not.toContain('href=');

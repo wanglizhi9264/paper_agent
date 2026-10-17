@@ -212,11 +212,12 @@ def build_grounded_context(
     *,
     guidance: str = "",
     reduced: bool = False,
+    allow_partial: bool = False,
 ) -> tuple[list[LLMMessage], list[SourceOut]]:
     from app.llm.prompts import build_system_prompt
 
     suffix = "\nReading workflow and continuity (not evidence):\n" + guidance if guidance else ""
-    empty_system = build_system_prompt("") + suffix
+    empty_system = build_system_prompt("", allow_partial=allow_partial) + suffix
     base = fit_messages(empty_system, query, history, counter, context_limit - 2012)
     budget = max(0, context_limit - 2012 - counter.count_messages(base) - 64)
     if reduced:
@@ -224,7 +225,12 @@ def build_grounded_context(
     sources = pack_source_blocks(candidates, counter, budget)
     if candidates and not sources:
         raise AgentError("CONTEXT_BUDGET_EXCEEDED")
-    system = build_system_prompt("\n\n".join(source_text(source) for source in sources)) + suffix
+    system = (
+        build_system_prompt(
+            "\n\n".join(source_text(source) for source in sources), allow_partial=allow_partial
+        )
+        + suffix
+    )
     return fit_messages(system, query, history, counter, context_limit - 2012), sources
 
 

@@ -472,3 +472,5 @@ context miss/citation miss 分解决定；本切片不自动过滤引用，也�
 用户问题复现仅用其本次提问和当前本地语料，不读取 frozen Gold 或 consumed test。诊断发现单轮检索返回 baseline 表格行而遗漏目标方法行；Agent 相近重复搜索也未解决。采用原 IR 表格行目录导航与 read_table 选行补证据，保留检索模型、排序、索引、默认策略不变，不据单题宣布总体质量达标。
 
 新增前端依赖 Vue、TanStack Vue Query、markdown-it 用于用户指定框架、服务端状态和禁 HTML 的 Markdown；plugin-vue/vue-tsc/Vue Test Utils/markdown-it types 为构建与测试依赖，均 MIT。替代为保留 React（不满足本次问答页 Vue 要求）或自行实现 Markdown（维护成本更高）。双框架分页面懒加载，不在问答页加载 React 管理 bundle；新增问答生产 JS 本次 build 约 218.54 kB / gzip 84.45 kB（包含 Vue、Query、Markdown），无模型或 CDN 运行依赖。
+
+2026-10-17 后续实现：追加同表选行证据合并与同页解释段落的独立来源，明确 Agent 的部分回答/歧义规则，避免“已知分类结果但未覆盖生成质量”导致整题拒答。保留旧 chat 默认策略与所有引用验证；单题开发 smoke 成功不用于宣布质量门通过。

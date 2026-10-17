@@ -15,6 +15,16 @@ from app.llm.openai_compatible import FakeLLMProvider, OpenAICompatibleProvider
 from app.llm.prompts import build_messages, build_rewrite_prompt, build_system_prompt
 
 
+def test_partial_evidence_policy_is_agent_opt_in() -> None:
+    strict = build_system_prompt("original evidence")
+    partial = build_system_prompt("original evidence", allow_partial=True)
+    assert "When evidence supports part" not in strict
+    assert "When evidence supports part" in partial
+    assert "Never generalize subset results" in partial
+    assert "Only when no directly supported facts" in partial
+    assert "Missing retrieved evidence is not evidence of absence" in partial
+
+
 async def test_stream_accepts_role_delta_with_null_content(monkeypatch):
     import httpx
 

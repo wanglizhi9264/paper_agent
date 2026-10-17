@@ -207,6 +207,27 @@ async def test_empty_evidence_refuses_without_generation(registry: SkillRegistry
         RuntimeState(), "Question", [], datetime.now(UTC) + timedelta(seconds=10)
     )
     assert result.answer == "Insufficient evidence in the provided sources."
+
+
+async def test_partial_answer_preserves_supported_citation_and_marks_gap(
+    registry: SkillRegistry,
+) -> None:
+    item = evidence("Dataset A classification accuracy is 91.7%.")
+    provider = ScriptedLLM(
+        [
+            "Dataset A classification accuracy is 91.7% [1].\n\nGeneration quality is not available in these sources."
+        ]
+    )
+    result = await PaperAgent(provider, QuarterCounter(), Backend(), MemoryStore(), registry).run(
+        RuntimeState(phase="finalize", evidence=[item]),
+        "What accuracy and generation quality are reported?",
+        [],
+        datetime.now(UTC) + timedelta(seconds=10),
+    )
+    assert result.answer.startswith("Dataset A")
+    assert result.citations == [{"index": 1, "chunk_id": str(item.source.chunk_id)}]
+    assert [claim.status for claim in result.claims] == ["cited", "gap"]
+    assert "When evidence supports part" in provider.messages[-1][0].content
     assert len(provider.messages) == 1
 
 

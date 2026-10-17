@@ -43,6 +43,29 @@ async def test_table_outline_and_targeted_rows_exclude_unrelated_headers(
         select(Chunk).where(Chunk.document_version_id == version.id).order_by(Chunk.chunk_index)
     )
     chunk.metadata_ = {"element_id": str(element.id)}
+    chunk.page_start = chunk.page_end = 1
+    neighbors = []
+    for document, page, text in [
+        (docs[0], 1, "The proposed method uses knowledge distillation."),
+        (docs[0], 2, "Other page must not leak."),
+        (docs[1], 1, "Other scoped document must not leak."),
+    ]:
+        neighbor = Chunk(
+            document_id=document.id,
+            document_version_id=document.active_document_version_id,
+            chunk_index=1000 + page,
+            kind="text",
+            section_path=["Results"],
+            page_start=page,
+            page_end=page,
+            raw_content=text,
+            retrieval_content="retrieval-only must not be cited",
+            content_hash=str(uuid.uuid4()).replace("-", "") * 2,
+            character_count=len(text),
+            metadata_={"element_kind": "paragraph"},
+        )
+        db.add(neighbor)
+        neighbors.append(neighbor)
     await db.commit()
     outline = await tools.table_outline(db, chunk)
     assert isinstance(outline, dict)
@@ -64,6 +87,9 @@ async def test_table_outline_and_targeted_rows_exclude_unrelated_headers(
     assert "19.5 %" in source.content
     assert "Method 18" not in source.content
     assert len(source.cell_ids) == 6
+    assert [e.source.chunk_id for e in result.evidence[1:]] == [neighbors[0].id]
+    assert result.evidence[1].source.content == neighbors[0].raw_content
+    assert "retrieval-only" not in str(result.model_dump())
 
 
 async def test_read_table_preserves_numeric_value_headers_and_provenance(
@@ -88,6 +114,7 @@ async def test_read_table_preserves_numeric_value_headers_and_provenance(
         select(Chunk).where(Chunk.document_version_id == version.id).order_by(Chunk.chunk_index)
     )
     chunk.metadata_ = {"element_id": str(element.id)}
+    chunk.page_start = chunk.page_end = 1
     await db.commit()
     result = await tools.execute(
         Action(tool="read_table", arguments={"evidence_id": str(chunk.id), "rows": [1]})

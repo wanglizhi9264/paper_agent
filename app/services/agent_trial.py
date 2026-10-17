@@ -351,11 +351,73 @@ class CorpusTools:
         evidence = Evidence(
             source=source, document_version_id=version.id, content_hash=chunk.content_hash
         )
+        # Tables need surrounding method/metric definitions. Keep each paragraph's own
+        # identity rather than hiding expanded prose behind the table citation.
+        page_chunks = list(
+            (
+                await db.execute(
+                    select(Chunk)
+                    .where(
+                        Chunk.document_version_id == version.id,
+                        Chunk.page_start >= source.page_start,
+                        Chunk.page_start <= source.page_end,
+                    )
+                    .order_by(Chunk.chunk_index)
+                )
+            ).scalars()
+        )
+        table_positions = [
+            c.chunk_index
+            for c in page_chunks
+            if (c.metadata_ or {}).get("element_id") == str(element.id)
+        ]
+        context_evidence: list[Evidence] = []
+        context_data: list[JsonValue] = []
+        if table_positions:
+            prose = [
+                c
+                for c in page_chunks
+                if (c.metadata_ or {}).get("element_kind") in {"paragraph", "caption"}
+            ]
+            before = [c for c in prose if c.chunk_index < min(table_positions)][-1:]
+            after = [c for c in prose if c.chunk_index > max(table_positions)][:2]
+            for neighbor in [*before, *after]:
+                content = truncate_text(neighbor.raw_content, 400, self.counter)
+                metadata = neighbor.metadata_ or {}
+                neighbor_source = SourceOut(
+                    index=1,
+                    chunk_id=neighbor.id,
+                    document_id=doc.id,
+                    document_title=doc.title or doc.filename,
+                    section_path=neighbor.section_path,
+                    page=str(neighbor.page_start or "unknown"),
+                    page_start=neighbor.page_start,
+                    page_end=neighbor.page_end,
+                    element_id=metadata.get("element_id"),
+                    element_kind=metadata.get("element_kind"),
+                    cell_ids=[],
+                    bboxes=[BBoxOut.model_validate(b) for b in metadata.get("bboxes", [])],
+                    content=content,
+                    truncated=content != neighbor.raw_content,
+                )
+                context_evidence.append(
+                    Evidence(
+                        source=neighbor_source,
+                        document_version_id=version.id,
+                        content_hash=neighbor.content_hash,
+                    )
+                )
+                context_data.append(
+                    {
+                        "chunk_id": str(neighbor.id),
+                        "text": truncate_text(content, 120, self.counter),
+                    }
+                )
         return Observation(
             tool="read_table",
             status="ok",
-            data={"chunk_id": str(chunk.id), "text": text},
-            evidence=[evidence],
+            data={"chunk_id": str(chunk.id), "text": text, "context": context_data},
+            evidence=[evidence, *context_evidence],
         )
 
 

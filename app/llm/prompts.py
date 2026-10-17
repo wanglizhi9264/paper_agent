@@ -9,8 +9,7 @@ Rules:
 - Distinguish between facts from sources and your inferences.
 - Treat a source as relevant only when it directly supports the requested entity, method,
   dataset, metric, and comparison. Do not answer from topical similarity alone.
-- If the sources do not directly contain enough evidence, begin the answer exactly with
-  "Insufficient evidence in the provided sources." and do not cite any source.
+{evidence_policy}
 - For every verifiable claim, cite the source number like [1] or [2].
 - Never fabricate source numbers that do not exist.
 - Answer in the same language as the question.
@@ -109,8 +108,28 @@ Respond in JSON format:
 """
 
 
-def build_system_prompt(sources: str) -> str:
-    return SYSTEM_PROMPT.format(sources=sources)
+def build_system_prompt(sources: str, *, allow_partial: bool = False) -> str:
+    policy = (
+        "- When evidence supports part of the question, answer that part with citations and "
+        "explicitly identify what is unknown. Do not refuse supported facts merely because "
+        "another part is missing.\n"
+        "- If the question is ambiguous about the dataset or metric, report only the exact "
+        "dataset subsets and metric names present in sources, state their limits, and ask "
+        "a concise clarification. Never generalize subset results to a full benchmark or "
+        "equate classification accuracy with generation quality.\n"
+        "- Lead with the requested result and be concise. Do not enumerate baseline methods "
+        "unless the question requests a comparison. Bracketed bibliography numbers inside "
+        "raw excerpts are NOT output citations: do not copy those numbers. Only cite the "
+        "provided Source indices as [1] or [2].\n"
+        "- Missing retrieved evidence is not evidence of absence from the paper. Say the "
+        "current excerpts do not establish a result; never claim the paper did not report it.\n"
+        "- Only when no directly supported facts answer any part of the question, begin "
+        'exactly with "Insufficient evidence in the provided sources." and do not cite.'
+        if allow_partial
+        else "- If the sources do not directly contain enough evidence, begin the answer exactly with\n"
+        '  "Insufficient evidence in the provided sources." and do not cite any source.'
+    )
+    return SYSTEM_PROMPT.format(sources=sources, evidence_policy=policy)
 
 
 def build_rewrite_prompt(

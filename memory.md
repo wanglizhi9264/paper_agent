@@ -401,3 +401,11 @@ chat template 的 tokenizer 与显式 supports_tools 配置。重启保留预算
 - 本次用户问题复现：旧单轮 Top10 含 baseline 行而没有目标方法行，warm search 1.94 秒、重启后 cold search 23.33 秒。Agent 真实复测 26.62 秒仍拒答；已接通 IR 表格行目录、40 cells 限额提示与选行表头修正，但发现同 chunk 后一次表格读取覆盖先前不同单元格证据，继续修复中。不得记作答案问题已解决。
 - 验证：全量 `uv run --no-sync pytest -q -p no:cacheprovider --basetemp storage/_test/pytest-vue-complete` 823 passed / 9 skipped；最后变更后 Agent focused 21 passed，Ruff check/format 与 mypy app 119 files 通过。前端 lint/typecheck/test/build 再跑通过。现有 PostgreSQL 集成上轮已跑，本轮无 schema 变化未重跑。未触碰冻结 test/Gold。
 - 新依赖与用途、MIT 许可、bundle 体积和替代方案见 proposal §27；Vue 用户要求覆盖原 React-only 约定，已同步 AGENTS/spec/README。新增 `docs/code-tour.md` 供学习阅读。
+
+### 2026-10-17 表格证据与部分回答修复
+
+- 修复同一表格 chunk 多次选行覆盖：`app/agent/evidence.py` 合并不相交 cell selection 的原文、cell IDs、bbox，保持唯一 chunk 引用；superset/subset 重读保持幂等。同页表格前 1 / 后 2 段上下文作为独立真实 chunk 返回，验证同版本/同页/固定 scope，raw_content 引用不混入 retrieval_content。
+- 明确 Agent PA-06 部分回答策略：有支持的事实作答并引用，缺失/歧义显式说明；禁止从子集推断完整数据集、从分类准确率推断生成质量、从未检索到证据推断论文未报告。只有全无支持时固定拒答，旧 chat 策略不变。提示模型不要复制论文 bibliography 编号为运行时引用；服务端 CITATION_INVALID 仍 fail closed，Vue 失败态隐藏未核验的流式草稿。
+- 真实当前问题 smoke 已成功返回有效引用答案（4 工具 / 5 LLM）；这仅是用户问题开发复测，不是新 holdout 质量门。索引/模型/排序默认值未改变，未读取或重跑 frozen test/Gold。
+- 实跑：`uv run --no-sync pytest -q -p no:cacheprovider --basetemp storage/_test/pytest-agent-grounding-final` 827 passed / 9 skipped；之后只改提示文本并跑最终相关测试 34 passed。Ruff check/format 通过，mypy app 120 files 通过。Vue lint/typecheck、20 tests、build 通过（问答 JS 218.66 kB / gzip 84.50 kB）。中间曾发现测试 fixture 页码与 IR 不匹配，已修正并重跑通过。
+- GitHub 开发快照已上传 `codex/paper-agent-runtime`，阅读入口 `docs/code-tour.md`。OAuth 无 workflow scope，仅本地 `.github/workflows/ci.yml` Node 24 调整未上传；未变更用户已有 context-loss/provenance 文件或 tmp。

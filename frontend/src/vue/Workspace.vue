@@ -27,7 +27,10 @@ const stream = useRunStream(runId);
 const busy = computed(() => Boolean(run.data.value && !terminal(run.data.value.status)));
 const readyDocs = computed(() => docs.data.value?.items.filter(d => d.status === 'ready') ?? []);
 const sources = computed(() => run.data.value?.sources ?? []);
-const answer = computed(() => run.data.value?.answer || stream.answer.value);
+const answer = computed(() => {
+  if (['failed', 'cancelled'].includes(run.data.value?.status ?? '')) return '';
+  return run.data.value?.answer || stream.answer.value;
+});
 const insufficient = computed(() => answer.value.startsWith('Insufficient evidence in the provided sources.'));
 const html = computed(() => renderAnswer(answer.value));
 const currentSource = computed(() => sources.value.find(s => s.index === selectedSource.value));

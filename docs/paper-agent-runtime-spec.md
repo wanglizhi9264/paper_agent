@@ -343,3 +343,7 @@ dev 用于参数/skill/prompt 选择；新增未见 holdout 用于一次锁定�
 `search_papers` 对具备已验证 IR 的表格来源返回同版本表格目录：element_id、行列数、最多 20 行的行表头（每行最多 12 tokens），同表只附一次目录；目录不作为数值结论的证据。Agent 在数值问题的搜索结果只有 baseline 行时应读取同表相关行，而不是重复相近搜索。`read_table` 行选择附带列头与覆盖所选行的合并行表头，禁止附带其他无关行的所有行表头；40 cells 上限仍生效。索引、检索排序和现有生产默认策略不变。
 
 修订补充：表格目录含保守 `max_rows_per_read`（按列数计算，合并表头仍可能使实际 cell 数更高）；超出 40 cells 时返回 `TABLE_SELECTION_TOO_LARGE` 的错误 observation，附 max_cells/selected_cells 和缩小选择提示，不返回证据。不得将失败调用当作论文无答案。此修订仅影响 Agent 工具，不改旧 search/chat 检索默认值。
+
+表格补证据契约：read_table 在同版本、同物理页内附带表格前最近 1 个与表格后最近 2 个 paragraph/caption chunk，每段最多 400 tokens，独立 chunk ID/引用，不混入表格来源。定位使用实际表格 chunks 的 index 区间；不读取其他文档/版本，不跨页无界扩展。工具 observation 的导航摘要仍受 2200 tokens 上限。多次读同一个表格 chunk 的不同 cell selections，必须合并已有内容/cell IDs/bbox，禁止以后一轮替换并丢失已读证据。
+
+Agent 部分回答规则（PA-06 的明确化）：若已有来源支持问题的一部分，必须就受支持部分作答并引用，明确未知项与实验范围；对于数据集/指标歧义，使用来源的精确名称，解释限制并追问，不把子集结果泛化为完整数据集或把分类准确率当生成质量。仅完全没有直接支持的事实时使用固定拒答句。该规则只用于 Agent，旧 chat 的严格拒答策略不变，服务端固定拒答归一化与引用验证仍保留。
