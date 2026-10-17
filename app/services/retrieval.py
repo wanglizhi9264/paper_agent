@@ -46,7 +46,9 @@ async def search_corpus(
     pinned_versions: dict[uuid.UUID, uuid.UUID] | None = None,
 ) -> SearchResponse:
     settings = settings or get_settings()
+    queue_started = perf_counter()
     await acquire_gpu_slot(session)
+    gpu_wait_ms = (perf_counter() - queue_started) * 1000
     started = perf_counter()
     timings: dict[str, float] = {}
     original_query = original_query or request.query
@@ -61,12 +63,17 @@ async def search_corpus(
     )
     if snapshot is None or not snapshot.faiss_path or not snapshot.bm25_path:
         raise IndexUnavailableError(message="Index is unavailable.")
-    if snapshot.embedding_signature != embedding_provider.manifest.signature:
+    timings["snapshot"] = (perf_counter() - started) * 1000
+    stage_started = perf_counter()
+    embedding_manifest = embedding_provider.manifest
+    timings["embedding_model_ready"] = (perf_counter() - stage_started) * 1000
+    if snapshot.embedding_signature != embedding_manifest.signature:
         raise DependencyUnavailableError(
             code="INDEX_INCOMPATIBLE",
             message="Configured embedding model does not match the active index.",
         )
 
+    scope_started = perf_counter()
     document_ids = await _resolve_scope(session, request)
     if pinned_versions is not None:
         document_ids &= set(pinned_versions)
@@ -100,21 +107,25 @@ async def search_corpus(
         )
     balance_document_ids = _balanced_document_ids(request, document_ids, settings)
 
+    timings["scope_db"] = (perf_counter() - scope_started) * 1000
     timings["scope"] = (perf_counter() - started) * 1000
     stage_started = perf_counter()
     faiss = FaissIndex.load(
-        Path(snapshot.faiss_path), expected_dimension=embedding_provider.manifest.dimension
+        Path(snapshot.faiss_path), expected_dimension=embedding_manifest.dimension
     )
     faiss_load_ms = (perf_counter() - stage_started) * 1000
     stage_started = perf_counter()
     bm25 = BM25Index.from_dict(json.loads(Path(snapshot.bm25_path).read_text(encoding="utf-8")))
     bm25_load_ms = (perf_counter() - stage_started) * 1000
+    timings["faiss_index_load"] = faiss_load_ms
+    timings["bm25_index_load"] = bm25_load_ms
     dense_lists: dict[str, list[tuple[int, float]]] = {}
     sparse_lists: dict[str, list[tuple[int, float]]] = {}
     named_queries = [("original", query_plan.original)]
     if query_plan.english is not None:
         named_queries.append(("english", query_plan.english))
 
+    sparse_queries: dict[str, str] = {}
     for name, query in named_queries:
         stage_started = perf_counter()
         query_vector = embedding_provider.embed_query(query).vectors[0]
@@ -140,6 +151,7 @@ async def search_corpus(
         sparse_query = query
         if query_plan.english is None and original_query != request.query:
             sparse_query = f"{original_query}\n{request.query}"
+        sparse_queries[name] = sparse_query
         sparse_all = bm25.search(
             sparse_query,
             top_k=len(allowed) if balance_document_ids else settings.retrieval_bm25_top_k,
@@ -314,6 +326,40 @@ async def search_corpus(
     debug: dict[str, object] | None = None
     if request.debug:
         debug = {
+            "schema_version": 1,
+            "embedding_manifest": embedding_manifest.to_dict(),
+            "index": {
+                "type": "IndexIDMap2/FlatIP",
+                "dimension": faiss.dimension,
+                "total_vectors": faiss.ntotal,
+                "scoped_vectors": len(allowed),
+                "scope_strategy": "scan_all_then_scope_before_top_k",
+            },
+            "bm25_explanations": {
+                name: bm25.explain(query, [row[0] for row in sparse_lists[name]])
+                for name, query in sparse_queries.items()
+            },
+            "rrf_k": 60,
+            "minimum_should_match": request.minimum_should_match,
+            "fusion_lists": (
+                {
+                    "dense_original": dense_lists["original"],
+                    "dense_english": dense_lists.get("english", []),
+                    "bm25_original": sparse_lists["original"],
+                    "bm25_english": sparse_lists.get("english", []),
+                }
+                if dual_enabled and settings.retrieval_cross_language_fusion == "four_way_rrf"
+                else {"dense": dense_merged, "bm25": bm25_merged}
+            ),
+            "reranker": {
+                "model_id": settings.rerank_model,
+                "revision": settings.rerank_revision,
+                "max_tokens": settings.rerank_max_tokens,
+                "status": "unavailable" if degraded_reasons else "applied",
+                "input_content": "retrieval_content",
+            },
+            "degraded_reasons": degraded_reasons,
+            "gpu_wait_ms": gpu_wait_ms,
             "dense": dense,
             "bm25": sparse,
             "dense_original": dense_lists["original"],

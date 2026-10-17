@@ -482,3 +482,7 @@ context miss/citation miss 分解决定；本切片不自动过滤引用，也�
 ## 29. 本地 MCP 实施启动（2026-10-17）
 
 用户已授权实施 local-mcp-plan M1–M3；按契约/migration→共享 reader→异步 evidence service/worker→STDIO adapter→真实协议验收推进。复用现有模型与 GPU 锁；表格切片算法与 retrieval ranking 不调整。M4 Python/LaTeX 产物不在本次工具范围。
+
+## 28. 2026-10-17：检索 Trace 纵向切片
+
+在既有 Agent/MCP 切片上增加 opt-in 可观察性：复用检索 debug 与 Agent JSON/event 存储，先落 API schema，再接实际工具执行、受固定版本限制的只读候选查询和 Vue 学习页。BM25 解释必须与现有评分一致；不改排序默认值，不触碰冻结评测 labels，不新增运行时依赖。独立学习页运行同一 Agent，旧记录无详细 trace 时不补造数据。

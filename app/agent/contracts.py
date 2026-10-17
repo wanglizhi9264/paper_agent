@@ -156,6 +156,7 @@ class Observation(StrictModel):
     data: JsonValue = None
     error_code: str | None = None
     evidence: list[Evidence] = Field(default_factory=list)
+    trace: dict[str, JsonValue] | None = None
 
 
 class RuntimeState(StrictModel):
@@ -184,6 +185,7 @@ class RuntimeState(StrictModel):
     completed_call_id: str = ""
     context_retry_used: bool = False
     claims: list[Claim] = Field(default_factory=list)
+    context_trace: dict[str, JsonValue] = Field(default_factory=dict)
 
 
 class TokenCounter(Protocol):

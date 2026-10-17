@@ -166,6 +166,7 @@ async def agent_run(ctx: dict[str, Any], run_id: str) -> None:
             context_limit=settings.llm_context_tokens,
             action_protocol=settings.agent_action_protocol,
             stream_answer=True,
+            trace_enabled=bool(pins.get("trace_enabled")),
             reasoning_effort=None
             if settings.agent_reasoning_effort == "provider_default"
             else settings.agent_reasoning_effort,

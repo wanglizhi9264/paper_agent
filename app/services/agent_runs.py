@@ -113,6 +113,7 @@ async def create_run(
     scope = SearchScope.model_validate({"type": session.scope_type, **session.scope_payload})
     pins = await corpus_pins(db, scope)
     pins["runtime"] = manifest(settings, registry)
+    pins["trace_enabled"] = body.trace_enabled
     skills = {name: registry.get(name).digest for name in body.skill_names}
     run_id = uuid.uuid4()
     message = Message(
@@ -326,6 +327,8 @@ class RunStore:
             payload: dict[str, Any] = {"llm_calls": state.llm_calls, "tool_calls": state.tool_calls}
             if state.action:
                 payload.update(tool=state.action.tool, call_id=state.action.call_id)
+                if run.pins.get("trace_enabled") and kind in {"tool.started", "action.selected"}:
+                    payload["arguments"] = state.action.arguments
             if kind == "tool.started" and state.action:
                 step = await db.scalar(
                     select(AgentStep).where(
@@ -360,7 +363,11 @@ class RunStore:
                 if step:
                     step.status = "succeeded" if observation.status == "ok" else "failed"
                     step.result_json = observation.model_dump(mode="json")
-                payload.update(tool=observation.tool, error_code=observation.error_code)
+                payload.update(
+                    tool=observation.tool,
+                    call_id=state.completed_call_id,
+                    error_code=observation.error_code,
+                )
                 if observation.tool == "load_skill" and observation.status == "ok":
                     await event(db, run, "skill.loaded", {"skills": state.loaded_skills})
             for evidence in state.evidence:
@@ -480,3 +487,13 @@ async def prune(db: AsyncSession, days: int) -> None:
     ids = select(AgentRun.id).where(AgentRun.status.in_(TERMINAL), AgentRun.finished_at < cutoff)
     for model in (AgentStep, AgentEvidence, AgentEvent, AgentCheckpoint):
         await db.execute(delete(model).where(model.run_id.in_(ids)))
+    # Detailed retrieval diagnostics are also copied into the recovery checkpoint.
+    # Clearing only AgentStep/Event would otherwise retain them indefinitely.
+    runs = list((await db.execute(select(AgentRun).where(AgentRun.id.in_(ids)))).scalars())
+    for run in runs:
+        state = RuntimeState.model_validate(run.state)
+        if state.context_trace or any(o.trace is not None for o in state.observations):
+            state.context_trace = {}
+            for observation in state.observations:
+                observation.trace = None
+            run.state = state.model_dump(mode="json")

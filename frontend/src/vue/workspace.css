@@ -594,3 +594,4 @@ padding:12px 10px}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;
 transition:none!important}
 }
+.trace-entry{display:block;padding:12px 18px;border-bottom:1px solid #edf0f5;color:#3775c9;text-decoration:none;font-size:11px;line-height:1.8}

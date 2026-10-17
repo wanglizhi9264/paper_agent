@@ -33,6 +33,8 @@ PDF Ingestion V2 is a staged architecture upgrade. V2-0 through V2-2 are accepte
 
 Vue 3 问答页现为默认 `/` 与 `/agent`：支持论文范围与技能选择、执行进度与等待计时、Markdown 回答、原文侧栏、中文证据不足提示、取消和恢复。管理/review 页面暂保留 React，旧单轮聊天位于 `/legacy-chat`。迁移依据为用户 2026-10-17 明确要求。
 
+详细链路学习页：打开 `http://127.0.0.1:5173/trace`，或从问答的“查看完整执行链路”进入。可检查每次工具的实际搜索词、BM25 分词/逐词贡献、FAISS 候选、RRF 贡献、精排名次、固定来源、上下文预算与事件耗时，并导出 JSON。新网页运行显式启用记录；历史未记录的数据不补造。使用和限制见 [Trace 学习指南](docs/retrieval-trace-guide.md)。
+
 LangGraph 调度有界工具循环；PostgreSQL 保存 checkpoint/事件/租约/fencing/outbox，ARQ
 执行并恢复后台任务。默认关闭，不改变现有 chat 的默认检索策略。
 

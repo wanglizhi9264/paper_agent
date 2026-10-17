@@ -905,3 +905,11 @@ resolver 冻结；旧题保留，不得删除困难题或依据 Retriever 返回
 实现范围为 `docs/local-mcp-plan.md` 的 M1–M3：本地 STDIO adapter、loopback evidence API、固定 scope/snapshot/version 的 30 分钟上下文、ARQ 有界检索、四个只读工具及协议验收。M4 综述产物工作流另行实现。本模块作为 MCP server 向宿主提供证据，不让内部 PaperAgent 自动调用第三方 MCP；扩展此前 runtime spec 的排除范围。
 
 持久化新增 evidence_contexts、evidence_operations，必须同迁移交付；operation 状态为 queued→running→succeeded/failed/cancelled，queued 可取消，running 可在 fencing 校验下完成或取消，lease 过期最多重派一次，75 秒固定 deadline 不重置。上下文 active→expired/invalidated 后释放 snapshot FK，删除文档同时 invalidates 涉及 context 并取消其未完成任务。结果读取再次校验 context，禁止删除后重放缓存证据。上下文不保存客户端聊天历史。详细工具大小/分页、版本与验收契约见上述方案，默认 API/MCP 关闭开关不影响旧 Agent。
+
+## 26. 可观察性补充：交互式检索 Trace（2026-10-17）
+
+- `AgentRunCreate.trace_enabled` 默认 false；Vue 研究界面和 `/trace` 学习界面显式设为 true。只记录可观察的工具参数、结果、阶段候选及耗时，不采集模型隐藏思维链或完整 prompt，不改变检索/生成策略。
+- `GET /api/v1/agent/runs/{run_id}/trace` 返回原始用户问题、固定 scope/snapshot、事件时间线、逐次工具输入输出、实际检索 debug、受固定 document/version 限制的候选片段，以及最终打包 sources。详细记录沿用 Agent 30 天保留策略；历史未启用、执行尚未完成、检索失败、过期与来源失效必须明确区分，禁止事后重跑伪装成原始 trace。
+- 检索 debug 只保存 ID、分数、查询、模型 manifest、BM25 分词/统计/逐词贡献、真实融合列表与参数、选择原因和计时；不复制论文正文。Trace API 按 run 固定版本读取候选 raw/retrieval 片段，各截取 1200 字符并标记截断；每次工具最多返回 200 个候选，超出必须标记。候选来源删除或版本不匹配时不读取其正文；已有最终答案/引用沿用原永久存储契约。
+- BM25 使用索引全体 chunk 的 N/df/avgdl，scope 约束候选；FAISS FlatIP 当前扫描全索引后先保留 scope 内 ID 再截取 dense Top-K。RRF 按实际参与融合的列表从 1 开始计算 `sum(1/(60+rank))`，精排降级不得将融合分数标记为 cross-encoder 分数。
+- Trace 存在 Observation 的独立字段，必须从 JSON/native 模型工具上下文排除；不会占用模型观察结果预算。使用现有 Agent JSON 列与事件存储，无数据库 schema 变化。工具开始/完成事件记录时间，worker 排队、LLM 调用与检索子阶段分别展示，重叠耗时不得直接相加。

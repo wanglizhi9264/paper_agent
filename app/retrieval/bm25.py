@@ -142,6 +142,47 @@ class BM25Index:
             "doc_tokens": {str(k): list(v) for k, v in self.stats.doc_tokens.items()},
         }
 
+    def explain(self, query: str, doc_ids: list[int]) -> dict[str, Any]:
+        """Explain existing scores without modifying search or corpus statistics."""
+        tokens = self._analyzer.analyze(query)
+        unique_terms = sorted(set(tokens))
+        terms = unique_terms[:64]
+        candidates: dict[str, Any] = {}
+        for doc_id in doc_ids[:200]:
+            dl = self.stats.doc_len.get(doc_id, 0)
+            contributions = []
+            for term in terms:
+                tf = self.stats.inverted_index.get(term, {}).get(doc_id, 0)
+                denominator = (
+                    tf + self.stats.k1 * (1 - self.stats.b + self.stats.b * dl / self.stats.avgdl)
+                    if self.stats.avgdl > 0
+                    else tf + self.stats.k1
+                )
+                contributions.append(
+                    {
+                        "term": term,
+                        "tf": tf,
+                        "df": self.stats.df.get(term, 0),
+                        "idf": self.idf.get(term, 0.0),
+                        "contribution": self.idf.get(term, 0.0)
+                        * tf
+                        * (self.stats.k1 + 1)
+                        / denominator,
+                    }
+                )
+            candidates[str(doc_id)] = {"doc_len": dl, "terms": contributions}
+        return {
+            "query": query,
+            "tokens": tokens[:128],
+            "unique_term_count": len(unique_terms),
+            "terms_truncated": len(unique_terms) > 64 or len(tokens) > 128,
+            "n_docs": self.stats.n_docs,
+            "avgdl": self.stats.avgdl,
+            "k1": self.stats.k1,
+            "b": self.stats.b,
+            "candidates": candidates,
+        }
+
     @classmethod
     def from_dict(cls, d: dict[str, Any], analyzer: Analyzer | None = None) -> BM25Index:
         stats = BM25Stats(

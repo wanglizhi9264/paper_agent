@@ -50,7 +50,7 @@ const start = useMutation({ mutationFn: async () => {
     const value = await apiPost<SessionItem>('/api/v1/sessions', { title: query.slice(0, 80), scope: selected.value.length ? { type: 'documents', document_ids: selected.value } : { type: 'all' } });
     session = value.id; sessionId.value = session; localStorage.setItem('paper-agent-session', session);
   }
-  const result = await apiPost<AgentRun>('/api/v1/agent/runs', { session_id: session, query, mode: 'agent', skill_names: skill.value ? [skill.value] : [] }, { 'Idempotency-Key': crypto.randomUUID() });
+  const result = await apiPost<AgentRun>('/api/v1/agent/runs', { session_id: session, query, mode: 'agent', skill_names: skill.value ? [skill.value] : [], trace_enabled: true }, { 'Idempotency-Key': crypto.randomUUID() });
   submitted.value = query; localStorage.setItem('paper-agent-question', query);
   return result;
 }, onSuccess: value => { runId.value = value.run_id; localStorage.setItem('paper-agent-run', value.run_id); question.value = ''; selectedSource.value = null; showLibrary.value = false; } });
@@ -76,6 +76,7 @@ const examples = ['这篇论文的方法解决了什么问题？', '核对实验
         <a class="nav-item active" href="/agent"><span>◈</span> 论文问答 <small>AGENT</small></a>
         <a class="nav-item" href="/documents"><span>▤</span> 论文库 <b>{{ readyDocs.length }}</b></a>
         <a class="nav-item" href="/collections"><span>▧</span> 我的合集</a>
+        <a class="nav-item" href="/trace"><span>⌁</span> 检索链路 <small>TRACE</small></a>
       </nav>
       <div class="scope-heading"><span class="nav-caption">{{ sessionId ? "库中论文" : "本次研究范围" }}</span><button class="text-button" :disabled="!!sessionId" @click="showLibrary = !showLibrary">{{ showLibrary ? '收起' : '选择' }}</button></div>
       <p class="scope-note">{{ sessionId ? '会话范围已固定，新建研究可重新选择。' : selected.length ? `已选择 ${selected.length} 篇论文` : '全部已就绪论文' }}</p>
@@ -100,6 +101,7 @@ const examples = ['这篇论文的方法解决了什么问题？', '核对实验
           <div class="answer-heading"><span class="answer-symbol">✳</span><div><strong>Paper Assistant</strong><small>{{ statusLabels[run.data.value?.status ?? 'queued'] }}</small></div><span v-if="busy" class="duration">{{ elapsed }}s</span></div>
           <div v-if="run.isLoading.value" role="status" class="progress-card">正在恢复研究记录…</div>
           <div v-if="run.data.value" class="progress-card">
+            <a class="trace-entry" :href="`/trace?run=${runId}`">查看完整执行链路：搜索词 → BM25 / FAISS → RRF → 精排 → 引用 ↗</a>
             <button class="progress-toggle" @click="showDetails = !showDetails"><span :class="{ pulse: busy }">{{ busy ? '●' : '✓' }}</span><strong>{{ statusLabels[run.data.value.status] }}</strong><small>{{ run.data.value.usage.search_calls }} 次检索 · {{ sources.length }} 条来源</small><span>{{ showDetails ? '−' : '＋' }}</span></button>
             <ol v-if="showDetails" class="steps"><li v-for="step in run.data.value.steps" :key="step.sequence"><span>{{ step.status === 'running' ? '◌' : step.status === 'failed' ? '!' : '✓' }}</span>{{ toolLabels[step.tool] ?? step.tool }}<small>{{ step.status === 'running' ? '进行中' : step.status === 'failed' ? '失败' : '完成' }}</small></li><li v-if="!run.data.value.steps.length">等待 worker 接收任务…</li></ol>
             <p v-if="busy && elapsed > 20" class="wait-hint">仍在处理。首次加载本地模型可能较慢，可以展开查看执行步骤。</p>

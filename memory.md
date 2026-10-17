@@ -429,3 +429,11 @@ chat template 的 tokenizer 与显式 supports_tools 配置。重启保留预算
 - 实跑验证：全量 `uv run --no-sync pytest -q -p no:cacheprovider --basetemp storage/_test/pytest-local-mcp-complete-final` 为 847 passed / 10 skipped。另 `.run/mcp_pg_tests.py` 包装 isolated PostgreSQL tests/integration/test_evidence_pg.py + test_migration.py（--run-integration）5 passed，涵盖迁移往返、并发重复 claim 仅执行一次、FK 保留/释放与通过 DocumentService 删除失效。Mypy app 130 files、Ruff check app tests eval/agent_eval.py、format --check 同范围 242 files、uv lock --check 通过。前端未修改，本轮未重跑前端测试。
 - 仓库根 `ruff check .` 在用户既有未跟踪 tmp 文件有 43 个问题；根 format check 有 16 个 tmp 文件不合格式，未改它们。显式 eval 全目录另发现两个 ignored private_benchmark 脚本格式差异，未改。受本次影响的源码/测试/公共 eval 检查通过；这些文件不纳入当前提交。
 - 切片只读审计：当前 active version 8724 chunks 全有 page_start，470 个 section_path 为空；表 parent/row/group/raw_text 分别 151/1091/2410/47。已写 docs/chunking-guide.md 解释父块不入索引、行/列组与可选整表 alias、物理页码/章节传递及解析局限。本次不修改 parser/chunker/index/ranking/Gold；字段存在不代表章节识别完备。
+
+### 2026-10-17 交互式检索 Trace
+
+- 已实现 Vue `/trace`，问答页加入逐次运行链接并显式启用 `trace_enabled`。展示原始问题/实际工具参数、BM25 分词及 tf/df/IDF 贡献、FAISS manifest/候选、实际 RRF 列表与贡献、精排前后名次与降级、选择/表格扩展、固定版本候选 raw/retrieval 预览、上下文 tokens/最终引用、事件时间线和 JSON 导出。Trace 模块懒加载，问答页不承担完整学习页加载体积。
+- 决策：复用 Agent 现有 JSON/event/checkpoint，无新迁移或依赖；新增 app/schemas/trace.py、services/agent_trace.py 和只读 GET /agent/runs/{id}/trace。诊断字段与工具模型观察分离，JSON/native 均测试不向模型回传；保留期清理同时移除 run.state 的诊断副本。未改变检索/生成策略、索引、模型、冻结评测或 Gold。新增 docs/retrieval-trace-guide.md；spec/proposal/README 同步契约与入口。
+- 验证：`uv run --no-sync pytest -q -p no:cacheprovider --basetemp storage/_test/trace-complete-final` 855 passed / 10 skipped；跳过 7 个显式 PostgreSQL 集成和 3 个模型/private smoke，本轮无 schema 变化未重跑它们。Ruff check app tests eval/agent_eval.py、format --check 同范围（245 files）、mypy app（132 files）通过。前端 lint/typecheck、26 tests 和 build 通过；懒加载后问答 JS 221.39 kB / gzip 85.65 kB、Trace JS 28.10 kB / gzip 10.91 kB。根检查的用户既有 tmp 问题维持上条记录，未改动无关文件。
+- 真实本机开发 smoke：原始 MDM/FID 简问仅触发标题查询并结束，未执行 RAG；明确要求正文检索后成功完成 3 次 search、1 次 list、5 次模型调用，最终打包 19 个来源。三次检索工具耗时约 25.52 / 2.96 / 3.21 秒；API 返回完整记录约 427 KB。这是可观察性验证，不是 FID 答案正确性或发布质量 gate。检索准备时间新增模型就绪/范围 DB 细分，不把冷加载归因给纯范围过滤。
+- 剩余：Agent 可能因标题未命中提前结束，或先把 MDM 误解为图像生成；本次如实暴露，未做 prompt/规划策略调优。旧运行没启用 trace 时不补造历史。浏览器 origin 先前被拒绝，未绕过做视觉验收；已完成组件交互/安全渲染和真实 API 验证。API/worker 已重启加载本次代码。

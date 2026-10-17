@@ -65,6 +65,7 @@ class PaperAgent:
         action_protocol: str = "json",
         stream_answer: bool = False,
         reasoning_effort: ReasoningEffort | None = "none",
+        trace_enabled: bool = False,
     ) -> None:
         self.provider = provider
         self.counter = counter
@@ -75,6 +76,7 @@ class PaperAgent:
         self.action_protocol = action_protocol
         self.stream_answer = stream_answer
         self.reasoning_effort = reasoning_effort
+        self.trace_enabled = trace_enabled
 
     async def _call(self, state: RuntimeState, messages: list[LLMMessage], output: int) -> str:
         reserve = self.counter.count_messages(messages) + output
@@ -99,6 +101,8 @@ class PaperAgent:
         state.tokens += max(0, actual - reserve)
         if state.tokens > 32000:
             raise AgentError("RUN_BUDGET_EXCEEDED")
+        if self.trace_enabled:
+            await self.store.save(state, "model.completed")
         return response.text
 
     def _instructions(self, state: RuntimeState) -> str:
@@ -116,7 +120,7 @@ class PaperAgent:
         }
         # JSON action adapter: observations are typed data, never new user instructions.
         observations = [
-            o.model_dump(mode="json", exclude={"evidence"})
+            o.model_dump(mode="json", exclude={"evidence", "trace"})
             for o in state.observations[-(2 if state.context_retry_used else 4) :]
         ]
         for observation in observations:
@@ -314,7 +318,7 @@ class PaperAgent:
                         {
                             "role": "tool",
                             "content": compact_json(
-                                observation.model_dump(mode="json", exclude={"evidence"})
+                                observation.model_dump(mode="json", exclude={"evidence", "trace"})
                             ),
                             "tool_call_id": action.call_id,
                         }
@@ -386,6 +390,8 @@ class PaperAgent:
         response = await self.provider.generate_action(
             request, tools, reasoning_effort=self.reasoning_effort
         )
+        if self.trace_enabled:
+            await self.store.save(state, "model.completed")
         if response.finish_reason == "length":
             raise AgentError("LLM_OUTPUT_INVALID")
         calls = response.message.tool_calls
@@ -467,6 +473,21 @@ class PaperAgent:
             reduced=state.context_retry_used,
             allow_partial=True,
         )
+        if self.trace_enabled:
+            state.context_trace = {
+                "input_tokens": self.counter.count_messages(messages),
+                "output_reserved_tokens": 1500,
+                "safety_margin_tokens": 512,
+                "context_limit": self.context_limit,
+                "history_messages_received": len(history),
+                "prompt_message_count": len(messages),
+                "observed_evidence_count": len(state.evidence),
+                "packed_source_ids": [str(s.chunk_id) for s in sources],
+                "truncated_source_count": sum(s.truncated for s in sources),
+                "context_retry_used": state.context_retry_used,
+                "summary_used": bool(state.summary),
+            }
+            await self.store.save(state, "context.prepared")
         text = (
             await self._stream_final(state, messages)
             if self.stream_answer

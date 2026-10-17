@@ -116,6 +116,7 @@ class CorpusTools(TableReader):
             raise AgentError("TOOL_OUTPUT_INVALID") from exc
 
     async def _execute_impl(self, action: Action) -> Observation:
+        trace = None
         async with self.sessions() as db:
             await self.check(db)
             if action.tool == "read_table":
@@ -160,6 +161,7 @@ class CorpusTools(TableReader):
                         query=search.query,
                         scope=SearchScope(type="documents", document_ids=ids),
                         top_k=search.top_k,
+                        debug=bool(self.pins.get("trace_enabled", False)),
                     ),
                     self.embedding,
                     settings=self.settings,
@@ -171,6 +173,8 @@ class CorpusTools(TableReader):
                     else None,
                 )
                 chunk_ids = [r.chunk_id for r in response.results]
+                if response.debug is not None:
+                    trace = response.model_dump(mode="json")["debug"]
                 limit = 160
             elif action.tool == "read_chunks":
                 chunk_ids = ReadChunks.model_validate(action.arguments).chunk_ids
@@ -246,7 +250,9 @@ class CorpusTools(TableReader):
             # Recheck after retrieval, so a concurrent activation cannot commit mixed evidence.
             await db.rollback()
             await self.check(db)
-            return Observation(tool=action.tool, status="ok", data=data, evidence=evidence)
+            return Observation(
+                tool=action.tool, status="ok", data=data, evidence=evidence, trace=trace
+            )
 
 
 class TrialStore:

@@ -15,6 +15,7 @@ class AgentRunCreate(StrictModel):
     query: str = Field(min_length=1, max_length=4000)
     mode: Literal["agent"] = "agent"
     skill_names: list[str] = Field(default_factory=list, max_length=2)
+    trace_enabled: bool = False
 
 
 class AgentRunOut(StrictModel):

@@ -21,6 +21,7 @@ from app.core.config import get_settings
 from app.db.session import get_session, get_sessionmaker
 from app.models.agent import AgentEvent, AgentRun
 from app.schemas.agent import AgentRunCreate, AgentRunOut, SkillOut
+from app.schemas.trace import AgentTraceOut
 from app.services.agent_runs import (
     TERMINAL,
     cancel_run,
@@ -30,8 +31,17 @@ from app.services.agent_runs import (
     run_out,
     utc,
 )
+from app.services.agent_trace import get_trace
 
 router = APIRouter(prefix="/api/v1/agent", tags=["agent"])
+
+
+@router.get("/runs/{run_id}/trace", response_model=AgentTraceOut)
+async def trace(
+    run_id: uuid.UUID,
+    db: Annotated[AsyncSession, Depends(get_session)],
+) -> AgentTraceOut:
+    return await get_trace(db, run_id, get_settings())
 
 
 def registry() -> SkillRegistry:

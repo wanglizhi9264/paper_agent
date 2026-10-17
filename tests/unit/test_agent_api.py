@@ -45,6 +45,11 @@ async def test_http_contract_idempotency_cancel_and_sse(
         assert replay.json()["run_id"] == str(seeded.id)
         assert "query" not in replay.json()
         assert "pins" not in replay.json()
+        trace = await client.get(f"/api/v1/agent/runs/{seeded.id}/trace")
+        assert trace.status_code == 200
+        assert trace.json()["availability"] == "not_recorded"
+        assert trace.json()["query"] == body.query
+        assert (await client.get(f"/api/v1/agent/runs/{uuid.uuid4()}/trace")).status_code == 404
         missing_key = await client.post("/api/v1/agent/runs", json=payload)
         assert missing_key.status_code == 422
         cancel = await client.post(f"/api/v1/agent/runs/{seeded.id}/cancel")
