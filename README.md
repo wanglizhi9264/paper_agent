@@ -32,6 +32,7 @@ PDF Ingestion V2 is a staged architecture upgrade. V2-0 through V2-2 are accepte
 ### Paper Agent 网页与持久化运行（2026-10-16）
 
 Vue 3 问答页现为默认 `/` 与 `/agent`：支持论文范围与技能选择、执行进度与等待计时、Markdown 回答、原文侧栏、中文证据不足提示、取消和恢复。管理/review 页面暂保留 React，旧单轮聊天位于 `/legacy-chat`。迁移依据为用户 2026-10-17 明确要求。
+
 LangGraph 调度有界工具循环；PostgreSQL 保存 checkpoint/事件/租约/fencing/outbox，ARQ
 执行并恢复后台任务。默认关闭，不改变现有 chat 的默认检索策略。
 
@@ -79,6 +80,24 @@ Ctrl+C 或进程退出后可显式 resume；已提交的工具步骤复用，但
 LangGraph 1.2.15（MIT）已锁定；它的 checkpoint 与 LangChain/LangSmith SDK 是传递依赖，
 不启用 LangSmith 云追踪，启动脚本明确关闭 tracing。采用服务自有事务 checkpoint，避免
 框架 saver 与业务数据库独立双写；未采用额外 PostgreSQL saver。安装体积与实际验证见 memory。
+
+### 本地只读 MCP（2026-10-17）
+
+已提供四个 STDIO 工具：`list_papers`、`search_papers`、`read_chunks`、`read_table`。MCP adapter 通过 loopback API 复用模型，检索在 ARQ worker 执行，不调用内部生成 LLM。实际 STDIO 客户端已验证目录、搜索、原文和表格读取；Codex 配置需要合并后重新加载，配置文件存在不代表当前聊天已接通。
+
+```powershell
+# 启用 MCP adapter 依赖；已有模型环境使用 --inexact 保留额外 ML 包
+uv sync --inexact --all-groups --extra mcp
+./scripts/start-agent.ps1 -McpOnly
+# 由 MCP 客户端启动以下入口；它会等待 STDIO 协议输入
+uv run --no-sync python -m app.mcp.server --transport stdio
+```
+
+将 [Codex 配置示例](examples/mcp/codex-config.toml) 合并到本机配置，按实际目录调整路径。API 侧默认 `PAPER_RAG_MCP_ENABLED=false`，启动脚本会显式启用。完整契约、30 分钟固定上下文、字符续读、范围/版本检查及剩余边界见 [本地 MCP 说明](docs/local-mcp-plan.md)。本地 API/数据库/Redis/worker 仍须运行；云端宿主模型会接收到工具返回的论文摘录。
+
+开发依赖包含 MCP SDK 供真实协议测试；生产非 MCP 安装可用 `--no-dev` 且不选 `mcp` extra。MCP 功能不包含 Python 执行或 LaTeX 文件/编译工具。
+
+此模式不要求 Agent tokenizer，不启动 Vue；需要已准备的论文索引及 E5/BGE 模型。若也要网页 Agent，使用不带 `-McpOnly` 的启动方式。
 
 ```bash
 # 1. Backend deps (core + dev)

@@ -11,6 +11,7 @@
 7. 工具：`app/agent/contracts.py` 定义白名单与参数；`app/services/agent_trial.py` 实现 scope 固定的搜索、原文及 IR 表格读取。它复用 `app/services/retrieval.py` 的既有检索链路。
 8. 技能：`app/agent/skills.py` 校验与按需加载 `agent_skills/*/SKILL.md`；技能是阅读指导，不是可执行脚本，也不授予额外权限。
 9. 验证：先看 `tests/unit/test_paper_agent.py`、`test_agent_table.py`、`test_agent_runs.py`，再看 `tests/integration/test_agent_trial.py`。Vue 交互测试在 `frontend/src/vue/Workspace.test.ts`。
+10. 本地 MCP：从 `app/mcp/server.py` → `client.py` → `app/api/evidence.py` → `app/services/evidence.py`/`app/workers/evidence.py` 阅读；协议测试 `test_mcp_protocol.py` 会启动真实 STDIO 子进程。配置与使用见 [本地 MCP](local-mcp-plan.md)，切片来源见 [切片说明](chunking-guide.md)。
 
 运行见 README。普通测试使用 deterministic fakes，不会自动下载模型。新 Agent dev/holdout 人工标注与语义引用审核仍待完成。
 

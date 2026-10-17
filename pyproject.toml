@@ -42,6 +42,9 @@ pdf-layout = [
     # Pinned after a verified Windows/Python 3.12 CPU smoke; see memory.md.
     "docling==2.121.0",
 ]
+mcp = [
+    "mcp==2.3.0",
+]
 
 [dependency-groups]
 dev = [
@@ -53,6 +56,7 @@ dev = [
     "types-pyyaml>=6.0.2,<7",
     "aiosqlite>=0.22.1",
     "greenlet>=3.5.5",
+    "mcp==2.3.0",
 ]
 
 [build-system]

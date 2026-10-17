@@ -1,13 +1,14 @@
-param()
+param([switch]$McpOnly)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $projectRoot
 $pythonPath = Join-Path $projectRoot '.venv/Scripts/python.exe'
 if (-not (Test-Path -LiteralPath $pythonPath)) { throw 'Run uv sync --all-groups and prepare the ML environment first.' }
-if (-not (Test-Path -LiteralPath 'storage/models/agent-tokenizer/agent_manifest.json')) {
+if (-not $McpOnly -and -not (Test-Path -LiteralPath 'storage/models/agent-tokenizer/agent_manifest.json')) {
     throw 'Prepare the matching tokenizer first. See README Paper Agent setup.'
 }
-$env:PAPER_RAG_AGENT_RUNTIME_ENABLED = 'true'
+$env:PAPER_RAG_AGENT_RUNTIME_ENABLED = if ($McpOnly) { 'false' } else { 'true' }
+$env:PAPER_RAG_MCP_ENABLED = 'true'
 $env:PAPER_RAG_AGENT_ACTION_PROTOCOL = 'json'
 $env:PYTHONUTF8 = '1'
 $env:NO_PROXY = '127.0.0.1,localhost'
@@ -25,17 +26,18 @@ New-Item -ItemType Directory -Force -Path $logRoot | Out-Null
 if (-not (Get-NetTCPConnection -State Listen -LocalPort 8000 -ErrorAction SilentlyContinue)) {
     $api = Start-Process -FilePath $pythonPath -ArgumentList '-m','uvicorn','app.main:app','--host','127.0.0.1','--port','8000' -WorkingDirectory $projectRoot -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logRoot 'agent-api.out.log') -RedirectStandardError (Join-Path $logRoot 'agent-api.err.log')
     Write-Output "API PID: $($api.Id)"
-} else { Write-Output 'Port 8000 already in use; restart that API with PAPER_RAG_AGENT_RUNTIME_ENABLED=true if Agent is disabled.' }
+} else { Write-Output 'Port 8000 already in use; existing API keeps its flags. Restart it to apply Agent/MCP enablement changes.' }
 $existingWorkers = @(Get-CimInstance Win32_Process -Filter "Name='python.exe'" | Where-Object { $_.CommandLine -match '-m arq app.workers.settings.WorkerSettings' })
 if ($existingWorkers.Count -eq 0) {
     $worker = Start-Process -FilePath $pythonPath -ArgumentList '-m','arq','app.workers.settings.WorkerSettings' -WorkingDirectory $projectRoot -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logRoot 'agent-worker.out.log') -RedirectStandardError (Join-Path $logRoot 'agent-worker.err.log')
     Write-Output "Worker PID: $($worker.Id)"
 } else { Write-Output 'Worker already running; restart it after code/config changes.' }
-if (-not (Get-NetTCPConnection -State Listen -LocalPort 5173 -ErrorAction SilentlyContinue)) {
+if (-not $McpOnly -and -not (Get-NetTCPConnection -State Listen -LocalPort 5173 -ErrorAction SilentlyContinue)) {
     $nodePath = (Get-Command node).Source
     $vitePath = Join-Path $projectRoot 'frontend/node_modules/vite/bin/vite.js'
     if (-not (Test-Path -LiteralPath $vitePath)) { throw 'Run npm --prefix frontend ci first.' }
     $web = Start-Process -FilePath $nodePath -ArgumentList $vitePath,'--host','127.0.0.1','--port','5173' -WorkingDirectory (Join-Path $projectRoot 'frontend') -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logRoot 'agent-web.out.log') -RedirectStandardError (Join-Path $logRoot 'agent-web.err.log')
     Write-Output "Frontend PID: $($web.Id)"
 }
-Write-Output 'Open http://127.0.0.1:5173/agent. Logs: storage/logs/agent-*'
+if ($McpOnly) { Write-Output 'MCP backend ready on loopback. Launch app.mcp.server from your MCP client. Logs: storage/logs/agent-*' }
+else { Write-Output 'Open http://127.0.0.1:5173/agent. Logs: storage/logs/agent-*' }

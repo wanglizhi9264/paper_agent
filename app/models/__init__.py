@@ -19,6 +19,7 @@ from app.models.agent_run import AgentTrialRun
 from app.models.chunk import FAISS_ID_SEQ, Chunk, DocumentVersion
 from app.models.collection import Collection, CollectionDocument
 from app.models.document import Document
+from app.models.evidence import EvidenceContext, EvidenceOperation
 from app.models.index_snapshot import IndexSnapshot, SystemState
 from app.models.job import IngestionJob
 from app.models.retrieval_log import RetrievalLog
@@ -38,6 +39,8 @@ __all__ = [
     "CollectionDocument",
     "Document",
     "DocumentVersion",
+    "EvidenceContext",
+    "EvidenceOperation",
     "IndexSnapshot",
     "IngestionJob",
     "Message",

@@ -899,3 +899,9 @@ resolver 冻结；旧题保留，不得删除困难题或依据 Retriever 返回
 - [BGE reranker v2 M3 model card](https://huggingface.co/BAAI/bge-reranker-v2-m3)
 - [Ollama OpenAI compatibility](https://docs.ollama.com/api/openai-compatibility)
 - [OpenCode providers](https://opencode.ai/docs/providers/)
+
+## 25. 本地只读 MCP（2026-10-17，授权实施）
+
+实现范围为 `docs/local-mcp-plan.md` 的 M1–M3：本地 STDIO adapter、loopback evidence API、固定 scope/snapshot/version 的 30 分钟上下文、ARQ 有界检索、四个只读工具及协议验收。M4 综述产物工作流另行实现。本模块作为 MCP server 向宿主提供证据，不让内部 PaperAgent 自动调用第三方 MCP；扩展此前 runtime spec 的排除范围。
+
+持久化新增 evidence_contexts、evidence_operations，必须同迁移交付；operation 状态为 queued→running→succeeded/failed/cancelled，queued 可取消，running 可在 fencing 校验下完成或取消，lease 过期最多重派一次，75 秒固定 deadline 不重置。上下文 active→expired/invalidated 后释放 snapshot FK，删除文档同时 invalidates 涉及 context 并取消其未完成任务。结果读取再次校验 context，禁止删除后重放缓存证据。上下文不保存客户端聊天历史。详细工具大小/分页、版本与验收契约见上述方案，默认 API/MCP 关闭开关不影响旧 Agent。

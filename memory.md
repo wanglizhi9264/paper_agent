@@ -10,6 +10,8 @@
 
 ### 恢复实施状态
 
+- 2026-10-17 本地只读 MCP 已实现：官方 mcp 2.3.0 STDIO adapter → loopback evidence API → ARQ 检索，四工具（目录/搜索/段落/表格）、30 分钟固定 context、字符续读、同版本校验、operation outbox/lease/fencing/deadline、删除/过期失效。新增 0006 migration 已应用本机。真实 SDK subprocess 端到端已验证，用户全局 Codex 配置未修改，当前聊天尚未注册 MCP；示例在 examples/mcp/codex-config.toml。M4 Python/LaTeX 产物工作流不在此切片。
+
 - 2026-10-17 已接通可选 Paper Agent Runtime：共享 tokenizer/context packing、JSON/native 工具协议、六个只读工具、四个 SKILL.md 技能与按需资源、LangGraph、PostgreSQL checkpoint/event/step/evidence/outbox、lease/fencing、ARQ 恢复、REST/SSE、前端 `/agent`。仓库默认关闭；本机启动脚本显式启用并仅监听 loopback。真实 DeepSeek/E5/BGE HTTP 闭环已成功：4 次工具、5 次 LLM、15 条实际来源、2533 字答案、47 个 SSE 事件、唯一完成终态；这只是运行 smoke，不是答案质量发布门通过。
 - Agent 工程质量门已实跑：后端全量 822 passed / 9 skipped；另外真实 PostgreSQL migration/锁/fencing/恢复/原子提交集成 6 passed；前端 lint/typecheck、14 个测试与生产 build 通过。新增表格测试验证原始数值/单位、表头、cell IDs 与 bbox；优雅中断可显式 resume，期限和预算不重置。浏览器页面视觉检查因访问权限被拒绝而未执行，未改用其他浏览器绕过。
 - Agent 新 dev/holdout 的人工 Gold、语义 claim/citation/table 审核及 baseline 质量对照尚未完成；`eval/agent_eval.py` 提供显式数据集运行入口，不自动生成或反改 Gold。旧 standard-v2 test 未运行。当前保持 opt-in，不能把带引用 smoke 当作 Recall/Citation/表格准确率达标。
@@ -411,3 +413,19 @@ chat template 的 tokenizer 与显式 supports_tools 配置。重启保留预算
 - GitHub 开发快照已上传 `codex/paper-agent-runtime`，阅读入口 `docs/code-tour.md`。OAuth 无 workflow scope，仅本地 `.github/workflows/ci.yml` Node 24 调整未上传；未变更用户已有 context-loss/provenance 文件或 tmp。
 
 - 最终真实同题重复：新 worker 首轮 27.48 秒（含本地模型冷启动），保持 worker 不重启后同题 6.97 秒，均成功并引用实际表格/解释段落，3 次工具（1 次检索）/5 次 LLM。各为一次观测，不是 p50/p95 或跨配置性能评测；保持进程和模型缓存可避免每题冷启动。修复已追加推送至同一 GitHub 分支。
+
+### 2026-10-17 本地 MCP 方案
+
+- 已交付 `docs/local-mcp-plan.md`，状态为设计提案：本地 STDIO → loopback API → 共享 evidence service/ARQ，四个只读工具，显式固定 scope/version context 与 migration/GC 契约，附拟用 Codex Windows 配置、实施切片和验收。参考官方 Codex/MCP SDK/Tools 规范；尚未新增 MCP 模块、依赖、数据库表或客户端配置。
+- 决策：复用 API 进程与现有 worker 的模型/GPU 调度，避免每个客户端重复加载模型；外部宿主负责长文规划/Python/LaTeX，首版不嵌套内部 Agent。已在方案明确云端宿主会接收工具返回摘录，本地服务不等于全离线。
+- 文档变更仅做 diff/代码围栏/TOML 示例解析检查；未运行代码测试，未改变当前已验证运行能力。实施与真实 MCP 客户端验收待后续任务。
+
+
+### 2026-10-17 本地 MCP 实现与验收
+
+- 采用本地 SDK STDIO → 类型化 HTTP client → 新 evidence service/ARQ，adapter 实测不导入 torch，不调用生成 LLM；共享 TableReader 保留原 Agent 接口。context 与 operation 为 PostgreSQL 事实来源，0006 migration 同交付；快照保留 FK 在过期/删除时释放，operation result 读取逐次验证 context，取消接口不返回缓存证据。lease 最多两次 claim，75 秒 deadline 不重置。
+- 依赖：mcp==2.3.0（MIT，生产 optional extra + dev 协议测试），相关 7 个 SDK/传递依赖本机文件约 12.53 MiB，完整许可/替代方案见 local-mcp-plan。安装时现有 API/worker 的 Windows pyd 文件锁导致首次同步失败，停止本项目进程后使用 --inexact 保留 ML 包完成安装，服务已重启。
+- 真实本机 SDK STDIO：工具发现、目录 6 篇、搜索 8 条来源、段落读取、表格 12 cell IDs 与 bbox/页码全部通过；最新服务一次检索 24.00 秒，先前一次冷环境 53.08 秒，非 p50/p95。未修改全局 Codex 配置，客户端配置加载/当前聊天工具注册仍需宿主完成，不能声称已接通当前聊天。
+- 实跑验证：全量 `uv run --no-sync pytest -q -p no:cacheprovider --basetemp storage/_test/pytest-local-mcp-complete-final` 为 847 passed / 10 skipped。另 `.run/mcp_pg_tests.py` 包装 isolated PostgreSQL tests/integration/test_evidence_pg.py + test_migration.py（--run-integration）5 passed，涵盖迁移往返、并发重复 claim 仅执行一次、FK 保留/释放与通过 DocumentService 删除失效。Mypy app 130 files、Ruff check app tests eval/agent_eval.py、format --check 同范围 242 files、uv lock --check 通过。前端未修改，本轮未重跑前端测试。
+- 仓库根 `ruff check .` 在用户既有未跟踪 tmp 文件有 43 个问题；根 format check 有 16 个 tmp 文件不合格式，未改它们。显式 eval 全目录另发现两个 ignored private_benchmark 脚本格式差异，未改。受本次影响的源码/测试/公共 eval 检查通过；这些文件不纳入当前提交。
+- 切片只读审计：当前 active version 8724 chunks 全有 page_start，470 个 section_path 为空；表 parent/row/group/raw_text 分别 151/1091/2410/47。已写 docs/chunking-guide.md 解释父块不入索引、行/列组与可选整表 alias、物理页码/章节传递及解析局限。本次不修改 parser/chunker/index/ranking/Gold；字段存在不代表章节识别完备。

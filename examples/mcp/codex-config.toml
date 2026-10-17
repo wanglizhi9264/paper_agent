@@ -1,0 +1,9 @@
+# Merge this section into your local Codex config; adjust paths on other machines.
+# Start the backend/worker with scripts/start-agent.ps1 first.
+[mcp_servers.paper_rag]
+command = 'D:\Digital_Life\02_Projects\01_paper_agent\.venv\Scripts\python.exe'
+args = ['-m', 'app.mcp.server', '--transport', 'stdio']
+cwd = 'D:\Digital_Life\02_Projects\01_paper_agent'
+env = { PAPER_RAG_MCP_API_BASE_URL = 'http://127.0.0.1:8000' }
+startup_timeout_sec = 15
+tool_timeout_sec = 90

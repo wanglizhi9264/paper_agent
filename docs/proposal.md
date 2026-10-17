@@ -474,3 +474,11 @@ context miss/citation miss 分解决定；本切片不自动过滤引用，也�
 新增前端依赖 Vue、TanStack Vue Query、markdown-it 用于用户指定框架、服务端状态和禁 HTML 的 Markdown；plugin-vue/vue-tsc/Vue Test Utils/markdown-it types 为构建与测试依赖，均 MIT。替代为保留 React（不满足本次问答页 Vue 要求）或自行实现 Markdown（维护成本更高）。双框架分页面懒加载，不在问答页加载 React 管理 bundle；新增问答生产 JS 本次 build 约 218.54 kB / gzip 84.45 kB（包含 Vue、Query、Markdown），无模型或 CDN 运行依赖。
 
 2026-10-17 后续实现：追加同表选行证据合并与同页解释段落的独立来源，明确 Agent 的部分回答/歧义规则，避免“已知分类结果但未覆盖生成质量”导致整题拒答。保留旧 chat 默认策略与所有引用验证；单题开发 smoke 成功不用于宣布质量门通过。
+
+## 28. 本地 RAG MCP 提案（2026-10-17，尚未实现）
+
+按用户要求输出 [本地 MCP 方案](local-mcp-plan.md)：优先采用客户端启动的 STDIO adapter，通过 loopback evidence API 复用现有模型/检索/IR；外部客户端负责规划与写作，MCP 不嵌套启动 PaperAgent。首期四个只读工具，显式 PostgreSQL evidence context 固定 scope/snapshot/version，检索长任务通过 ARQ，包含 migration、删除/GC 协调、结构化来源和协议端到端验收。此处仅记录提案，不改变当前运行能力或默认值；实施时再同步主 spec 的新增契约。Python 执行和 LaTeX 产物工作流为后续独立阶段。
+
+## 29. 本地 MCP 实施启动（2026-10-17）
+
+用户已授权实施 local-mcp-plan M1–M3；按契约/migration→共享 reader→异步 evidence service/worker→STDIO adapter→真实协议验收推进。复用现有模型与 GPU 锁；表格切片算法与 retrieval ranking 不调整。M4 Python/LaTeX 产物不在本次工具范围。

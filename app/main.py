@@ -65,6 +65,9 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    from app.api.evidence import router as evidence_router
+
+    app.include_router(evidence_router)
     app.include_router(health_router)
     app.include_router(documents_router)
     app.include_router(collections_router)

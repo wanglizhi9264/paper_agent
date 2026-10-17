@@ -22,6 +22,7 @@
 - 检索：FAISS CPU FlatIP + 自研 BM25 + RRF + cross-encoder rerank。
 - 前端：按用户 2026-10-17 指令，问答 `/` 与 `/agent` 使用 Vue 3 + Vite + TypeScript strict；管理/review 页面暂保留 React，分页面懒加载。
 - LLM：OpenAI-compatible provider；OpenCode 不是运行时依赖。
+- 本地 MCP：可选 STDIO adapter，经 loopback evidence API 调用固定 scope/version 的四个只读工具；adapter 不加载模型，检索在 ARQ worker 执行。协议测试使用 dev 依赖中的官方 MCP SDK，不自动下载真实模型。
 - 默认 embedding 为 768 维 E5；任何代码都不得硬编码 768 或 1024，实际维度来自 model/index manifest。
 
 ## 3. 实施原则

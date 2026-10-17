@@ -203,6 +203,9 @@ class DocumentService:
     ) -> IngestionJob:
         doc = await self.get_document(session, document_id)
         # Idempotent: if a delete_cleanup job is already running, return it.
+        from app.services.evidence import invalidate_document_contexts
+
+        await invalidate_document_contexts(session, document_id)
         existing = await self._find_active_job(session, document_id, JobKind.DELETE_CLEANUP)
         if existing is not None:
             return existing

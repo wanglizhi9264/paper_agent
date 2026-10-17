@@ -85,6 +85,7 @@ class Settings(BaseSettings):
     llm_request_timeout_seconds: float = 120.0
 
     # Paper Agent is opt-in; configuration never changes the legacy chat defaults.
+    mcp_enabled: bool = False
     agent_runtime_enabled: bool = False
     agent_action_protocol: Literal["json", "native"] = "json"
     agent_supports_tools: bool = False
